@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="PrivateDrive">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="application-name" content="PrivateDrive">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>PrivateDrive</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--blue:#007aff;--red:#ff3b30;--green:#34c759;--bg:#f2f2f7;--card:#fff;--label:#000;--label2:rgba(60,60,67,.6);--sep:rgba(60,60,67,.18);--fill:rgba(120,120,128,.12);--blur:rgba(249,249,249,.82);--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--blue:#0a84ff;--red:#ff453a;--green:#30d158;--bg:#000;--card:#1c1c1e;--label:#fff;--label2:rgba(235,235,245,.6);--sep:rgba(84,84,88,.5);--fill:rgba(118,118,128,.24);--blur:rgba(22,22,24,.82)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--label);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;background:none}
+.hidden{display:none!important}
+#phone{position:relative;height:100dvh;width:100%;overflow:hidden;background:var(--bg)}
+@media(min-width:600px){body{background:#d1d1d6;display:flex;align-items:center;justify-content:center}
+#phone{width:390px;height:min(844px,calc(100dvh - 40px));border-radius:48px;box-shadow:0 0 0 10px #111,0 30px 80px rgba(0,0,0,.35);--sat:44px;--sab:20px}}
+
+/* Auth */
+#auth{position:absolute;inset:0;overflow-y:auto;padding:calc(var(--sat) + 48px) 20px calc(var(--sab) + 24px);background:var(--bg);z-index:30}
+.app-icon{width:76px;height:76px;border-radius:18px;background:linear-gradient(160deg,#4da3ff,#0a64d6);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;box-shadow:0 8px 22px rgba(0,122,255,.35)}
+.app-icon svg{width:40px;height:40px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#auth h1{text-align:center;font-size:30px;margin:0 0 6px;letter-spacing:-.4px}
+#auth .sub{text-align:center;color:var(--label2);margin:0 0 26px;font-size:15px}
+.seg{display:flex;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:18px}
+.seg button{flex:1;padding:7px;border-radius:7px;font-size:13px;font-weight:600;transition:.2s}
+.seg button.on{background:var(--card);box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.group{background:var(--card);border-radius:12px;overflow:hidden}
+.group input{display:block;width:100%;border:0;background:none;padding:14px 16px;font-size:17px;outline:none;border-bottom:.5px solid var(--sep)}
+.group input:last-child{border-bottom:0}
+.group input::placeholder{color:var(--label2)}
+.btn{display:block;width:100%;padding:15px;border-radius:14px;background:var(--blue);color:#fff;font-size:17px;font-weight:600;margin-top:20px;transition:.15s}
+.btn:active{opacity:.6;transform:scale(.98)}.btn:disabled{opacity:.4}
+.note{margin:14px 6px 0;padding:12px 14px;border-radius:12px;font-size:14px;display:none}
+.note.show{display:block}.note.error{background:rgba(255,59,48,.14);color:var(--red)}.note.success{background:rgba(52,199,89,.16);color:var(--green)}
+
+/* Nav */
+#nav{position:absolute;top:0;left:0;right:0;z-index:10;padding-top:var(--sat);background:transparent;transition:.2s}
+#nav.solid{background:var(--blur);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);box-shadow:0 .5px 0 var(--sep)}
+.nav-row{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;position:relative}
+.nav-title{position:absolute;left:0;right:0;text-align:center;font-weight:600;font-size:17px;opacity:0;transition:.2s;pointer-events:none}
+#nav.solid .nav-title{opacity:1}
+.nav-btn{color:var(--blue);font-size:17px;padding:8px 0;z-index:1;display:flex;align-items:center;gap:4px}
+.nav-btn:active{opacity:.4}.nav-btn svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+
+/* Scroll */
+#scroll{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--sat) + 44px) 16px calc(var(--sab) + 110px)}
+.large{font-size:34px;font-weight:700;letter-spacing:.3px;margin:2px 4px 10px}
+.search{display:flex;align-items:center;gap:6px;background:var(--fill);border-radius:10px;padding:0 8px;height:36px;margin-bottom:18px}
+.search svg{width:16px;height:16px;fill:none;stroke:var(--label2);stroke-width:2.2;stroke-linecap:round}
+.search input{flex:1;border:0;background:none;outline:none;font-size:17px}
+.search input::placeholder{color:var(--label2)}
+.hdr{font-size:13px;color:var(--label2);margin:0 16px 7px;text-transform:uppercase;letter-spacing:-.1px}
+.list{background:var(--card);border-radius:12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:10px 14px;width:100%;text-align:left;position:relative;transition:background .1s}
+.row:active{background:var(--fill)}
+.row+.row::before{content:"";position:absolute;top:0;left:66px;right:0;height:.5px;background:var(--sep)}
+.ico{flex:0 0 40px;height:40px;border-radius:9px;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.2px}
+.r-info{flex:1;min-width:0}
+.r-name{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-meta{font-size:13px;color:var(--label2);margin-top:2px}
+.chev{width:8px;height:14px;stroke:var(--label2);opacity:.6;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 8px}
+.empty{text-align:center;padding:70px 30px;color:var(--label2)}
+.empty svg{width:64px;height:64px;fill:none;stroke:var(--label2);stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;opacity:.6;margin-bottom:10px}
+.empty b{display:block;color:var(--label);font-size:21px;margin-bottom:4px}
+.empty span{font-size:15px}
+.foot{text-align:center;color:var(--label2);font-size:13px;margin-top:14px}
+#scroll.drag{outline:3px dashed var(--blue);outline-offset:-8px}
+
+/* Tab bar */
+#tabbar{position:absolute;left:0;right:0;bottom:0;z-index:10;display:flex;padding:7px 0 calc(var(--sab) + 2px);background:var(--blur);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);box-shadow:0 -.5px 0 var(--sep)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--label2);font-size:10px;font-weight:500}
+.tab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--blue)}.tab:active{opacity:.5}
+
+/* Progress */
+#progress{position:absolute;left:14px;right:14px;bottom:calc(var(--sab) + 70px);z-index:15;background:var(--blur);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-radius:18px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.18);transition:.3s}
+#progress.hidden{display:block!important;opacity:0;transform:translateY(20px);pointer-events:none}
+.p-top{display:flex;justify-content:space-between;gap:10px;font-size:14px;font-weight:600}
+.p-top span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{height:5px;border-radius:3px;background:var(--fill);margin:10px 0 7px;overflow:hidden}
+.bar{height:100%;width:0;background:var(--blue);border-radius:3px;transition:width .15s linear}
+.p-bot{display:flex;justify-content:space-between;font-size:12px;color:var(--label2)}
+
+/* Sheets */
+.ov{position:absolute;inset:0;z-index:70;background:rgba(0,0,0,.35);display:flex;flex-direction:column;justify-content:flex-end;padding:8px 8px calc(var(--sab) + 8px);animation:fade .25s}
+.sheet{background:var(--blur);-webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);border-radius:14px;overflow:hidden;margin-bottom:8px;animation:up .32s cubic-bezier(.2,.8,.2,1)}
+.sheet .t{padding:14px 16px;text-align:center;font-size:13px;color:var(--label2);border-bottom:.5px solid var(--sep)}
+.sheet .t b{display:block;color:var(--label);font-size:15px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet button.a{display:block;width:100%;padding:17px;font-size:20px;color:var(--blue);border-top:.5px solid var(--sep)}
+.sheet .t+button.a{border-top:0}
+.sheet button.a:active{background:var(--fill)}
+.sheet button.a.d{color:var(--red)}
+.sheet.cancel button.a{font-weight:600;background:var(--card)}
+.full{border-radius:22px;background:var(--bg);padding:18px 16px 20px;margin-bottom:0}
+.full h3{margin:0 0 2px;text-align:center;font-size:17px}
+.full p{margin:0 0 16px;text-align:center;font-size:13px;color:var(--label2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.full .btn{margin-top:14px}
+.full .cancel-l{display:block;margin:14px auto 0;color:var(--blue);font-size:17px}
+#toasts{position:absolute;top:calc(var(--sat) + 8px);left:0;right:0;z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.toast{background:rgba(40,40,42,.92);color:#fff;padding:11px 18px;border-radius:22px;font-size:14px;font-weight:500;max-width:88%;text-align:center;animation:drop .35s cubic-bezier(.2,.8,.2,1);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast.error{background:rgba(255,59,48,.95)}.toast.success{background:rgba(40,160,80,.95)}
+.row{cursor:pointer}
+.ico{position:relative;overflow:hidden}
+.ico img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.more{flex:0 0 34px;height:34px;border-radius:50%;color:var(--blue);display:flex;align-items:center;justify-content:center}
+.more:active{background:var(--fill)}.more svg{width:22px;height:22px;fill:currentColor}
+.exp{color:#ff9500}
+#pv{position:absolute;inset:0;z-index:60;background:#000;color:#fff;overflow:hidden;animation:fade .2s}
+#pvStage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+#pvStage img{max-width:100%;max-height:100%;object-fit:contain;touch-action:none;user-select:none;-webkit-user-drag:none}
+#pvStage video{width:100%;max-height:100%;background:#000}
+#pvStage iframe{width:100%;border:0;background:#fff;height:calc(100% - var(--sat) - var(--sab) - 100px);margin-top:calc(var(--sat) + 44px)}
+.pv-top,.pv-bot{position:absolute;left:0;right:0;z-index:2;display:flex;align-items:center;transition:opacity .2s}
+.pv-top{top:0;padding-top:var(--sat);height:calc(var(--sat) + 48px);background:linear-gradient(rgba(0,0,0,.65),transparent)}
+.pv-bot{bottom:0;justify-content:center;gap:28px;padding:22px 0 calc(var(--sab) + 12px);background:linear-gradient(transparent,rgba(0,0,0,.65));font-size:14px}
+.pv-top button,.pv-bot button{color:#fff;font-size:17px;min-width:64px;padding:8px 14px}
+.pv-bot button{font-size:34px;line-height:1;min-width:44px;padding:0 10px}
+.pv-top button:active,.pv-bot button:active{opacity:.4}
+.pv-top svg{width:22px;height:22px;fill:#fff;vertical-align:middle}
+#pvTitle{flex:1;text-align:center;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-hide .pv-top,.pv-hide .pv-bot{opacity:0;pointer-events:none}
+.aud{display:flex;flex-direction:column;align-items:center;gap:18px;padding:30px;text-align:center;width:100%}.aud audio{width:100%}
+.big{width:110px;height:110px;font-size:24px;border-radius:24px;flex:none}
+.nop{text-align:center;padding:30px}.nop .btn{max-width:220px;margin:18px auto 0}
+.nav-r{display:flex;gap:18px;align-items:center;z-index:1}
+.chk{display:none;flex:0 0 22px;height:22px;border-radius:50%;border:1.5px solid var(--label2);align-items:center;justify-content:center;color:#fff;transition:.12s}
+.selmode .chk{display:flex}.selmode .more{display:none}
+.selmode .row+.row::before{left:100px}
+.row.on .chk{background:var(--blue);border-color:var(--blue)}
+.row.on .chk::after{content:"\2713";font-size:13px;font-weight:700}
+#selbar{position:absolute;left:0;right:0;bottom:0;z-index:10;display:flex;align-items:center;padding:8px 22px calc(var(--sab) + 10px);min-height:calc(var(--sab) + 56px);background:var(--blur);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);box-shadow:0 -.5px 0 var(--sep)}
+#selbar button{color:var(--blue);font-size:17px;font-weight:500;padding:10px 4px}
+#selbar button.dng{color:var(--red);margin-left:auto}
+#selbar button:disabled{opacity:.35}#selbar button:active:not(:disabled){opacity:.5}
+.inst{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;padding:12px;margin:0 0 16px}
+.inst img{width:44px;height:44px;border-radius:10px;flex:none}
+.inst div{flex:1;min-width:0;font-size:13px;color:var(--label2);line-height:1.3}
+.inst b{display:block;color:var(--label);font-size:15px;margin-bottom:1px}
+.pill{background:var(--blue);color:#fff;border-radius:16px;padding:6px 16px;font-weight:600;font-size:15px}
+.pill:active{opacity:.6}
+.inst .x{color:var(--label2);font-size:22px;line-height:1;padding:4px 4px 4px 2px}
+#loading{position:absolute;inset:0;z-index:90;display:flex;align-items:center;justify-content:center}
+.spin{width:44px;height:44px;border-radius:12px;background:rgba(40,40,42,.85);display:flex;align-items:center;justify-content:center}
+.spin i{width:22px;height:22px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+@keyframes fade{from{opacity:0}}@keyframes up{from{transform:translateY(110%)}}@keyframes drop{from{transform:translateY(-40px);opacity:0}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="phone">
+
+<!-- AUTH -->
+<div id="auth">
+  <div class="app-icon"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 16v-5m-2 2 2-2 2 2"/></svg></div>
+  <h1 id="aTitle">PrivateDrive</h1>
+  <p class="sub" id="aSub">Sign in to access your private files.</p>
+  <div class="seg"><button id="segIn" class="on" type="button">Sign In</button><button id="segUp" type="button">Create Account</button></div>
+  <form id="authForm" novalidate>
+    <div class="group">
+      <input id="email" type="email" placeholder="Email" autocomplete="email" autocapitalize="none">
+      <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+      <input id="conf" type="password" placeholder="Confirm password" autocomplete="new-password" class="hidden">
+    </div>
+    <div id="aNote" class="note"></div>
+    <button class="btn" id="aBtn" type="submit">Sign In</button>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div id="nav"><div class="nav-row">
+    <button class="nav-btn" id="settings">Settings</button><button class="nav-btn hidden" id="allBtn">Select All</button>
+    <div class="nav-title" id="navTitle">My Files</div>
+    <div class="nav-r"><button class="nav-btn" id="selBtn">Select</button><button class="nav-btn" id="addBtn" aria-label="Upload"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+  </div></div>
+  <div id="scroll">
+    <h1 class="large" id="title">My Files</h1>
+    <div id="install" class="inst hidden"><img src="icons/icon-192.png" alt=""><div><b>Install PrivateDrive</b>Add it to your home screen for full-screen access.</div><button class="pill" id="instBtn">Install</button><button class="x" id="instX" aria-label="Dismiss">&times;</button></div>
+    <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search"></label>
+    <div class="hdr" id="count"></div>
+    <div id="list"></div>
+    <div class="foot" id="who"></div>
+  </div>
+  <div id="selbar" class="hidden"><button id="shBtn" disabled>Share</button><button id="delBtn" class="dng" disabled>Delete</button></div>
+  <div id="progress" class="hidden">
+    <div class="p-top"><span id="pName">Uploading…</span><span id="pPct" style="color:var(--blue)">0%</span></div>
+    <div class="track"><div class="bar" id="pBar"></div></div>
+    <div class="p-bot"><span id="pSize"></span><span id="pInfo"></span></div>
+  </div>
+  <nav id="tabbar">
+    <button class="tab on" data-tab="my"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Files</button>
+    <button class="tab" data-tab="shared"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>Shared With Me</button>
+    <button class="tab" data-tab="sent"><svg viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 19h14"/></svg>Shared By Me</button>
+  </nav>
+</div>
+
+<div id="pv" class="hidden">
+  <div class="pv-top"><button id="pvDone">Done</button><div id="pvTitle"></div><button id="pvMore" aria-label="Options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+  <div id="pvStage"></div>
+  <div class="pv-bot"><button id="pvPrev" aria-label="Previous">&#8249;</button><span id="pvCount"></span><button id="pvNext" aria-label="Next">&#8250;</button></div>
+</div>
+<input id="fileInput" type="file" multiple class="hidden">
+<div id="toasts"></div>
+<div id="loading" class="hidden"><div class="spin"><i></i></div></div>
+</div>
+
+<script>
+const SUPABASE_URL="https://hvupbigxuhfkjzjrydzv.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2dXBiaWd4dWhma2p6anJ5ZHp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2OTg4NDAsImV4cCI6MjEwNjI3NDg0MH0.AH4K1YNbQHE73D8Ljtrahhbrvw6AohGOPf3sDJVzDFQ";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const BUCKET="my-files";
+const $=id=>document.getElementById(id);
+let user=null,tab="my",items=[],signup=false;
+
+/* ---------- helpers ---------- */
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+const bytes=b=>{if(b===0)return"Zero KB";if(!b)return"Unknown size";const u=["bytes","KB","MB","GB","TB"],i=Math.min(4,Math.floor(Math.log(b)/Math.log(1024)));return(b/Math.pow(1024,i)).toFixed(i<2?0:1)+" "+u[i]};
+const when=d=>{try{return new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",year:"numeric"}).format(new Date(d))}catch{return""}};
+const safeName=n=>n.replace(/[<>:"/\\|?*\x00-\x1F]/g,"_").replace(/\s+/g," ").trim().slice(0,240)||"file";
+const TYPES=[["IMG","#ff9500",["jpg","jpeg","png","gif","webp","bmp","svg","heic"]],["PDF","#ff3b30",["pdf"]],["DOC","#007aff",["doc","docx","txt","rtf"]],["XLS","#34c759",["xls","xlsx","csv"]],["VID","#af52de",["mp4","mov","avi","mkv","webm"]],["AUD","#ff2d55",["mp3","wav","aac","m4a"]],["ZIP","#8e8e93",["zip","rar","7z"]]];
+const kind=n=>{const e=(n.split(".").pop()||"").toLowerCase();return TYPES.find(t=>t[2].includes(e))||["FILE","#636366"]};
+function toast(m,t=""){const d=document.createElement("div");d.className="toast "+t;d.textContent=m;$("toasts").appendChild(d);setTimeout(()=>d.remove(),3200)}
+const busy=v=>$("loading").classList.toggle("hidden",!v);
+function note(el,m,t="error"){el.textContent=m;el.className="note show "+t}
+function authErr(m){const l=String(m).toLowerCase();if(l.includes("invalid login"))return"Incorrect email or password.";if(l.includes("already registered"))return"An account with this email already exists.";if(l.includes("not confirmed"))return"Confirm your email address before signing in.";if(l.includes("at least"))return"Your password is too short.";return m}
+
+/* ---------- auth ---------- */
+function setMode(up){signup=up;$("segIn").classList.toggle("on",!up);$("segUp").classList.toggle("on",up);$("conf").classList.toggle("hidden",!up);$("aBtn").textContent=up?"Create Account":"Sign In";$("aSub").textContent=up?"Create a private account for your files.":"Sign in to access your private files.";$("pass").autocomplete=up?"new-password":"current-password";$("aNote").className="note"}
+$("segIn").onclick=()=>setMode(false);$("segUp").onclick=()=>setMode(true);
+$("authForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const email=$("email").value.trim(),password=$("pass").value,n=$("aNote");
+  if(!email||!password)return note(n,"Enter your email and password.");
+  if(signup){
+    if(password!==$("conf").value)return note(n,"The passwords do not match.");
+    if(password.length<6)return note(n,"Password must be at least 6 characters.");
+  }
+  busy(true);
+  const r=signup?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
+  busy(false);
+  if(r.error)return note(n,authErr(r.error.message));
+  if(signup){$("authForm").reset();note(n,r.data&&r.data.session?"Account created.":"Account created. Check your email to confirm it.","success")}
+  else $("authForm").reset();
+});
+$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
+function showAuth(){$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
+async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";await sweep();await load()}
+(async()=>{
+  const{data}=await sb.auth.getSession();
+  data&&data.session?await showApp(data.session.user):showAuth();
+  sb.auth.onAuthStateChange(async(ev,s)=>{if(s&&s.user){if(!user||user.id!==s.user.id)await showApp(s.user)}else{user=null;showAuth()}});
+})();
+
+/* ---------- sheets ---------- */
+function sheet(title,sub,acts){
+  const ov=document.createElement("div");ov.className="ov";
+  ov.innerHTML=`<div class="sheet"><div class="t"><b>${esc(title)}</b>${esc(sub||"")}</div>${acts.map((a,i)=>`<button class="a ${a.d?"d":""}" data-i="${i}">${esc(a.l)}</button>`).join("")}</div><div class="sheet cancel"><button class="a">Cancel</button></div>`;
+  const close=()=>ov.remove();
+  ov.onclick=e=>{if(e.target===ov)close()};
+  ov.querySelector(".cancel button").onclick=close;
+  ov.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{close();acts[b.dataset.i].f()});
+  $("phone").appendChild(ov);
+}
+function shareSheet(it){
+  const arr=Array.isArray(it)?it:[it];
+  const ov=document.createElement("div");ov.className="ov";
+  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Files":"File"}</h3><p>${esc(arr.length>1?arr.length+" files":arr[0].name)}</p><div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
+  const close=()=>ov.remove();
+  ov.onclick=e=>{if(e.target===ov)close()};
+  $("phone").appendChild(ov);
+  ov.querySelector("#sNo").onclick=close;
+  setTimeout(()=>ov.querySelector("#rcpt").focus(),300);
+  const go=ov.querySelector("#sGo"),sn=ov.querySelector("#sNote");
+  go.onclick=async()=>{
+    const email=ov.querySelector("#rcpt").value.trim().toLowerCase();
+    if(!email)return note(sn,"Enter the recipient's email address.");
+    go.disabled=true;go.textContent="Sharing…";
+    try{
+      let ok=0,msg="";
+      for(const f of arr){
+        const{data,error}=await sb.rpc("share_file",{p_file_id:f.id,p_recipient_email:email});
+        if(error)msg=error.message;else if(!data||!data.success)msg=(data&&data.message)||"The file could not be shared.";else ok++;
+      }
+      if(!ok)return note(sn,msg);
+      toast(ok===arr.length?(arr.length>1?`Shared ${ok} files`:`Shared "${arr[0].name}"`):`Shared ${ok} of ${arr.length}: ${msg}`,ok===arr.length?"success":"error");
+      close();if(selMode)setSel(false);if(tab==="sent")load();
+    }catch(e){console.error(e);note(sn,"Something went wrong.")}
+    finally{go.disabled=false;go.textContent="Share"}
+  };
+}
+
+/* ---------- tabs & lists ---------- */
+const TITLES={my:"My Files",shared:"Shared With Me",sent:"Shared By Me"};
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  if(t.dataset.tab===tab){$("scroll").scrollTo({top:0,behavior:"smooth"});return load()}
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
+  tab=t.dataset.tab;$("q").value="";load();
+});
+async function load(){
+  $("selBtn").classList.toggle("hidden",tab==="shared");updateSel();
+  $("list").innerHTML=`<div class="empty"><span>Loading…</span></div>`;
+  let r;
+  if(tab==="my")r=await sb.from("files").select("*").eq("owner_id",user.id).order("created_at",{ascending:false});
+  else r=await sb.from("file_shares").select("*").eq(tab==="shared"?"recipient_id":"owner_id",user.id).order("created_at",{ascending:false});
+  if(r.error){console.error(r.error);$("count").textContent="";return $("list").innerHTML=emptyHtml("Couldn't load files",r.error.message)}
+  items=(r.data||[]).map(f=>tab==="my"?{id:f.id,name:f.original_name,size:f.file_size,date:f.created_at,path:f.storage_path,exp:f.expires_at}:{id:f.id,name:f.file_name,size:f.file_size,date:f.created_at,path:f.storage_path});
+  render();thumbs();
+}
+function emptyHtml(t,s){return`<div class="empty"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><b>${esc(t)}</b><span>${esc(s)}</span></div>`}
+function render(){
+  const q=$("q").value.trim().toLowerCase();
+  const rows=items.map((it,i)=>({it,i})).filter(({it})=>!q||it.name.toLowerCase().includes(q));
+  const unit=tab==="sent"?"share":"file";
+  $("count").textContent=rows.length?`${rows.length} ${unit}${rows.length===1?"":"s"}`:"";
+  if(!rows.length){
+    const m={my:["No Files Yet","Tap + to upload from this phone."],shared:["Nothing Shared With You","Files shared to your account appear here."],sent:["Nothing Shared Yet","Share a file from My Files to see it here."]}[tab];
+    return $("list").innerHTML=q?emptyHtml("No Results",`Nothing matches “${q}”.`):emptyHtml(...m);
+  }
+  $("list").innerHTML=`<div class="list${selMode?" selmode":""}">${rows.map(({it,i})=>{const k=kind(it.name);return`<div class="row${selSet.has(it.id)?" on":""}" data-i="${i}"><div class="chk"></div><div class="ico" ${ptype(it.name)==="image"?`data-p="${esc(it.path)}"`:""} style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(it.name)}</div><div class="r-meta">${bytes(it.size)} · ${when(it.date)}${it.exp?` · <span class="exp">${left(it.exp)}</span>`:""}</div></div><button class="more" aria-label="Options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>`}).join("")}</div>`;applyThumbs();
+}
+$("q").addEventListener("input",render);
+$("list").addEventListener("click",e=>{
+  const b=e.target.closest(".row");if(!b)return;
+  const it=items[b.dataset.i];
+  if(selMode){selSet.has(it.id)?selSet.delete(it.id):selSet.add(it.id);b.classList.toggle("on");return updateSel()}
+  if(!e.target.closest(".more")&&ptype(it.name))return openPv(it);
+  actions(it);
+});
+function actions(it){
+  const sub=`${bytes(it.size)} · ${when(it.date)}`;
+  if(tab==="my")sheet(it.name,sub,[{l:"Download",f:()=>download(it)},{l:"Share…",f:()=>shareSheet(it)},{l:"Auto-Delete…",f:()=>expSheet(it)},{l:"Delete",d:1,f:()=>sheet(`Delete “${it.name}”?`,"This permanently removes the file and its shares.",[{l:"Delete File",d:1,f:()=>del(it)}])}]);
+  else if(tab==="shared")sheet(it.name,sub,[{l:"Download",f:()=>download(it)}]);
+  else sheet(it.name,sub,[{l:"Remove Access",d:1,f:()=>revoke(it)}]);
+}
+const scr=$("scroll");scr.addEventListener("scroll",()=>$("nav").classList.toggle("solid",scr.scrollTop>38),{passive:true});
+
+/* ---------- file actions ---------- */
+async function download(it){
+  try{
+    busy(true);
+    const{data,error}=await sb.storage.from(BUCKET).download(it.path);
+    busy(false);
+    if(error){console.error(error);return toast("Download failed: "+error.message,"error")}
+    const url=URL.createObjectURL(data),a=document.createElement("a");
+    a.href=url;a.download=it.name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(e){busy(false);console.error(e);toast("Download failed.","error")}
+}
+async function purge(id,path){
+  await sb.from("file_shares").delete().eq("storage_path",path).eq("owner_id",user.id);
+  const r=await sb.storage.from(BUCKET).remove([path]);
+  if(r.error)return r;
+  return await sb.from("files").delete().eq("id",id).eq("owner_id",user.id);
+}
+async function del(it){
+  closePv();busy(true);
+  const r=await purge(it.id,it.path);
+  busy(false);
+  if(r&&r.error){console.error(r.error);return toast("Couldn't delete: "+r.error.message,"error")}
+  toast("File deleted","success");load();
+}
+async function revoke(it){
+  closePv();busy(true);
+  const{error}=await sb.from("file_shares").delete().eq("id",it.id).eq("owner_id",user.id);
+  busy(false);
+  if(error){console.error(error);return toast(error.message,"error")}
+  toast("Access removed","success");load();
+}
+
+/* ---------- upload ---------- */
+$("addBtn").onclick=()=>$("fileInput").click();
+$("fileInput").addEventListener("change",async e=>{const f=Array.from(e.target.files||[]);if(f.length)await uploadFiles(f);e.target.value=""});
+["dragenter","dragover"].forEach(n=>scr.addEventListener(n,e=>{e.preventDefault();scr.classList.add("drag")}));
+["dragleave","drop"].forEach(n=>scr.addEventListener(n,e=>{e.preventDefault();scr.classList.remove("drag")}));
+scr.addEventListener("drop",e=>{const f=Array.from(e.dataTransfer.files||[]);if(f.length)uploadFiles(f)});
+
+function progressStart(f,i,n){$("progress").classList.remove("hidden");$("pName").textContent=f.name;$("pPct").textContent="0%";$("pBar").style.width="0%";$("pSize").textContent=`0 / ${bytes(f.size)}`;$("pInfo").textContent=n>1?`File ${i+1} of ${n}`:""}
+function progressUpdate(f,i,n,loaded,t0){
+  const p=f.size>0?Math.min(100,Math.round(loaded/f.size*100)):100,sp=loaded/Math.max((Date.now()-t0)/1000,.001);
+  $("pPct").textContent=p+"%";$("pBar").style.width=p+"%";$("pSize").textContent=`${bytes(loaded)} / ${bytes(f.size)}`;
+  $("pInfo").textContent=(n>1?`File ${i+1} of ${n} · `:"")+bytes(sp)+"/s";
+}
+async function uploadFiles(files){
+  if(!user)return;
+  let ok=0;
+  for(let i=0;i<files.length;i++){
+    const f=files[i];progressStart(f,i,files.length);
+    try{
+      const r=await uploadOne(f,i,files.length);
+      if(r.success){ok++;$("pPct").textContent="100%";$("pBar").style.width="100%";$("pInfo").textContent="Done"}
+      else toast(`${f.name}: ${r.message}`,"error");
+    }catch(e){console.error(e);toast(`Couldn't upload ${f.name}.`,"error")}
+  }
+  setTimeout(()=>$("progress").classList.add("hidden"),900);
+  if(ok)toast(`${ok} file${ok===1?"":"s"} uploaded`,"success");
+  if(tab==="my")load();
+}
+async function uploadOne(file,i,n){
+  const path=`${user.id}/${crypto.randomUUID()}/${safeName(file.name)}`;
+  const{data:sd}=await sb.auth.getSession();
+  const s=sd&&sd.session;
+  if(!s)return{success:false,message:"Your session expired. Sign in again."};
+  try{await xhrUpload(file,path,s.access_token,i,n)}
+  catch(e){console.error(e);return{success:false,message:e.message||"Upload failed."}}
+  const row={owner_id:user.id,original_name:file.name,storage_path:path,mime_type:file.type||"application/octet-stream",file_size:file.size},ex=expAt(defExp);
+  let{error}=await sb.from("files").insert(ex?{...row,expires_at:ex}:row);
+  if(error&&ex&&/expires_at/.test(error.message)){toast("Uploaded without auto-delete: add the expires_at column.","error");({error}=await sb.from("files").insert(row))}
+  if(error){console.error(error);await sb.storage.from(BUCKET).remove([path]);return{success:false,message:error.message}}
+  return{success:true};
+}
+function xhrUpload(file,path,token,i,n){
+  return new Promise((res,rej)=>{
+    const x=new XMLHttpRequest(),enc=path.split("/").map(encodeURIComponent).join("/");
+    x.open("POST",`${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(BUCKET)}/${enc}`,true);
+    x.setRequestHeader("apikey",SUPABASE_ANON_KEY);x.setRequestHeader("Authorization","Bearer "+token);
+    x.setRequestHeader("x-upsert","false");x.setRequestHeader("cache-control","3600");
+    x.setRequestHeader("Content-Type",file.type||"application/octet-stream");
+    const t0=Date.now();
+    x.upload.onprogress=e=>{if(e.lengthComputable)progressUpdate(file,i,n,e.loaded,t0)};
+    x.onload=()=>{
+      if(x.status>=200&&x.status<300)return res();
+      let m="Upload failed.";
+      try{const r=JSON.parse(x.responseText);m=r.message||r.error||m}catch{if(x.responseText)m=x.responseText}
+      rej(new Error(m));
+    };
+    x.onerror=()=>rej(new Error("Network error while uploading."));
+    x.onabort=()=>rej(new Error("Upload cancelled."));
+    x.ontimeout=()=>rej(new Error("Upload timed out."));
+    x.send(file);
+  });
+}
+
+/* ---------- auto-delete ---------- */
+const K=["never","day","week","month"],DL={never:"Never",day:"After 1 day",week:"After 1 week",month:"After 1 month"},DUR={day:864e5,week:6048e5,month:2592e6};
+let defExp="never";try{defExp=localStorage.getItem("pd_exp")||"never"}catch{}
+if(!K.includes(defExp))defExp="never";
+const expAt=k=>k==="never"?null:new Date(Date.now()+DUR[k]).toISOString();
+function left(iso){
+  const ms=new Date(iso)-Date.now();if(ms<=0)return"Deleting soon";
+  const d=Math.floor(ms/864e5),h=Math.floor(ms/36e5);
+  return d>=1?`Deletes in ${d} day${d===1?"":"s"}`:h>=1?`Deletes in ${h} hr`:"Deletes in under 1 hr";
+}
+function defSheet(){sheet("Auto-Delete New Uploads","Files are removed automatically after this time.",K.map(k=>({l:(k===defExp?"✓ ":"")+DL[k],f:()=>{defExp=k;try{localStorage.setItem("pd_exp",k)}catch{}toast("Auto-Delete: "+DL[k])}})))}
+function expSheet(it){sheet("Auto-Delete",it.name,K.map(k=>({l:DL[k],f:()=>setExp(it,k)})))}
+async function setExp(it,k){
+  const v=expAt(k);busy(true);
+  const{data,error}=await sb.from("files").update({expires_at:v}).eq("id",it.id).eq("owner_id",user.id).select("id");
+  busy(false);
+  if(error){console.error(error);return toast(/expires_at/.test(error.message)?"Add the expires_at column in Supabase first.":error.message,"error")}
+  if(!data||!data.length)return toast("Couldn't update. Check the update policy on files.","error");
+  it.exp=v;render();toast(k==="never"?"Auto-delete turned off":"Auto-Delete: "+DL[k],"success");
+}
+async function sweep(){
+  if(!user)return 0;
+  const{data,error}=await sb.from("files").select("id,storage_path").eq("owner_id",user.id).lt("expires_at",new Date().toISOString());
+  if(error||!data||!data.length)return 0;
+  let n=0;for(const f of data){const r=await purge(f.id,f.storage_path);if(!(r&&r.error))n++}
+  if(n)toast(`${n} expired file${n===1?"":"s"} removed`);
+  return n;
+}
+document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&user){const n=await sweep();if(n&&tab==="my")load()}});
+
+/* ---------- PWA ---------- */
+let dip=null;
+const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const canInstall=()=>!standalone()&&(!!dip||isIOS());
+function refreshInstall(){
+  let x=false;try{x=localStorage.getItem("pd_inst_x")==="1"}catch{}
+  $("install").classList.toggle("hidden",!canInstall()||x);
+}
+async function installApp(){
+  if(dip){
+    dip.prompt();const r=await dip.userChoice;dip=null;refreshInstall();
+    if(r.outcome==="accepted")toast("Installing PrivateDrive…","success");
+    return;
+  }
+  if(isIOS())sheet("Install on iPhone","Tap the Share button in Safari, choose Add to Home Screen, then tap Add.",[{l:"Got It",f:()=>{}}]);
+  else sheet("Install PrivateDrive","Open your browser menu and choose Install app or Add to Home screen.",[{l:"OK",f:()=>{}}]);
+}
+$("instBtn").onclick=installApp;
+$("instX").onclick=()=>{try{localStorage.setItem("pd_inst_x","1")}catch{}refreshInstall()};
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();dip=e;refreshInstall()});
+window.addEventListener("appinstalled",()=>{dip=null;refreshInstall();toast("PrivateDrive installed","success")});
+window.addEventListener("offline",()=>toast("You're offline","error"));
+window.addEventListener("online",()=>toast("Back online","success"));
+refreshInstall();
+if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(console.error));
+
+/* ---------- multi-select ---------- */
+let selMode=false;const selSet=new Set();
+const vis=()=>{const q=$("q").value.trim().toLowerCase();return items.filter(x=>!q||x.name.toLowerCase().includes(q))};
+function setSel(on){
+  selMode=on;selSet.clear();
+  $("selBtn").textContent=on?"Done":"Select";
+  $("settings").classList.toggle("hidden",on);$("addBtn").classList.toggle("hidden",on);$("allBtn").classList.toggle("hidden",!on);
+  $("tabbar").classList.toggle("hidden",on);$("selbar").classList.toggle("hidden",!on);
+  $("shBtn").classList.toggle("hidden",tab!=="my");
+  $("delBtn").textContent=tab==="sent"?"Remove Access":"Delete";
+  render();updateSel();
+}
+function updateSel(){
+  const n=selSet.size,v=vis();
+  const t=selMode?(n?`${n} Selected`:"Select Items"):TITLES[tab];
+  $("title").textContent=$("navTitle").textContent=t;
+  $("shBtn").disabled=$("delBtn").disabled=!n;
+  $("allBtn").textContent=v.length&&v.every(x=>selSet.has(x.id))?"Deselect All":"Select All";
+}
+$("selBtn").onclick=()=>setSel(!selMode);
+$("allBtn").onclick=()=>{const v=vis(),all=v.every(x=>selSet.has(x.id));v.forEach(x=>all?selSet.delete(x.id):selSet.add(x.id));render();updateSel()};
+$("shBtn").onclick=()=>{const a=items.filter(x=>selSet.has(x.id));if(a.length)shareSheet(a)};
+$("delBtn").onclick=()=>{
+  const arr=items.filter(x=>selSet.has(x.id)),n=arr.length,sent=tab==="sent";if(!n)return;
+  sheet(sent?`Remove access for ${n} share${n>1?"s":""}?`:`Delete ${n} file${n>1?"s":""}?`,sent?"Recipients will no longer see them.":"This permanently removes the files and their shares.",[{l:sent?"Remove Access":"Delete",d:1,f:async()=>{
+    busy(true);let ok=0,err="";
+    for(const it of arr){
+      const r=sent?await sb.from("file_shares").delete().eq("id",it.id).eq("owner_id",user.id):await purge(it.id,it.path);
+      if(r&&r.error)err=r.error.message;else ok++;
+    }
+    busy(false);setSel(false);
+    toast(ok===n?(sent?"Access removed":`${n} file${n>1?"s":""} deleted`):`${ok} of ${n} done: ${err}`,ok===n?"success":"error");
+    load();
+  }}]);
+};
+$("q").addEventListener("input",()=>{if(selMode)updateSel()});
+
+/* ---------- preview ---------- */
+const PT={image:["jpg","jpeg","png","gif","webp","bmp","svg","heic","avif"],video:["mp4","mov","m4v","webm"],audio:["mp3","wav","aac","m4a","ogg"],pdf:["pdf"]};
+const ptype=n=>{const e=(n.split(".").pop()||"").toLowerCase();return Object.keys(PT).find(k=>PT[k].includes(e))||""};
+const urlCache={};
+const fresh=p=>urlCache[p]&&Date.now()-urlCache[p].t<3e6;
+async function getUrl(path){
+  if(fresh(path))return urlCache[path].u;
+  const{data}=await sb.storage.from(BUCKET).createSignedUrl(path,3600);
+  if(data&&data.signedUrl){urlCache[path]={u:data.signedUrl,t:Date.now()};return data.signedUrl}
+  const d=await sb.storage.from(BUCKET).download(path);
+  if(d.data){const u=URL.createObjectURL(d.data);urlCache[path]={u,t:Date.now()};return u}
+  return null;
+}
+async function thumbs(){
+  const need=items.filter(x=>ptype(x.name)==="image"&&x.size<6e6&&!fresh(x.path)).slice(0,40).map(x=>x.path);
+  if(need.length){const{data}=await sb.storage.from(BUCKET).createSignedUrls(need,3600);(data||[]).forEach(d=>{if(d.signedUrl)urlCache[d.path]={u:d.signedUrl,t:Date.now()}})}
+  applyThumbs();
+}
+function applyThumbs(){
+  document.querySelectorAll(".ico[data-p]").forEach(el=>{
+    const c=urlCache[el.dataset.p];
+    if(c&&!el.querySelector("img")){const im=document.createElement("img");im.loading="lazy";im.alt="";im.src=c.u;im.onerror=()=>im.remove();el.appendChild(im)}
+  });
+}
+let pvList=[],pvIdx=0,pvTok=0,z={s:1,x:0,y:0},g={},tapT=0,chromeT;
+function openPv(it){
+  const q=$("q").value.trim().toLowerCase();
+  pvList=items.filter(x=>ptype(x.name)&&(!q||x.name.toLowerCase().includes(q)));
+  pvIdx=Math.max(0,pvList.indexOf(it));
+  $("pv").classList.remove("hidden","pv-hide");showPv();
+}
+function closePv(){$("pv").classList.add("hidden");$("pvStage").innerHTML="";pvTok++}
+function pvGo(d){const n=pvIdx+d;if(n<0||n>=pvList.length)return;pvIdx=n;$("pv").classList.remove("pv-hide");showPv()}
+async function showPv(){
+  const it=pvList[pvIdx],t=ptype(it.name),my=++pvTok,stg=$("pvStage");
+  z={s:1,x:0,y:0};
+  $("pvTitle").textContent=it.name;$("pvCount").textContent=`${pvIdx+1} of ${pvList.length}`;
+  document.querySelector(".pv-bot").style.display=pvList.length<2?"none":"flex";
+  stg.innerHTML='<div class="spin"><i></i></div>';
+  const url=await getUrl(it.path);
+  if(my!==pvTok)return;
+  const fail=()=>{if(my!==pvTok)return;const k=kind(it.name);stg.innerHTML=`<div class="nop"><div class="ico big" style="background:${k[1]};margin:0 auto 14px">${k[0]}</div><div>This file can't be previewed.</div><button class="btn" id="pvDl">Download</button></div>`;$("pvDl").onclick=()=>download(it)};
+  if(!url)return fail();
+  const u=esc(url);
+  stg.innerHTML=t==="image"?`<img id="pvImg" src="${u}" draggable="false" alt="">`:t==="video"?`<video src="${u}" controls playsinline autoplay></video>`:t==="audio"?`<div class="aud"><div class="ico big" style="background:#ff2d55">AUD</div><div>${esc(it.name)}</div><audio src="${u}" controls autoplay></audio></div>`:`<iframe src="${u}"></iframe>`;
+  const m=stg.querySelector("img,video,audio");if(m)m.onerror=fail;
+}
+$("pvDone").onclick=closePv;
+$("pvMore").onclick=()=>actions(pvList[pvIdx]);
+$("pvPrev").onclick=()=>pvGo(-1);$("pvNext").onclick=()=>pvGo(1);
+document.addEventListener("keydown",e=>{if($("pv").classList.contains("hidden"))return;if(e.key==="Escape")closePv();if(e.key==="ArrowLeft")pvGo(-1);if(e.key==="ArrowRight")pvGo(1)});
+function ap(){const im=$("pvImg");if(im)im.style.transform=`translate(${z.x}px,${z.y}px) scale(${z.s})`}
+const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+const stg0=$("pvStage");
+stg0.addEventListener("touchstart",e=>{
+  if(!$("pvImg"))return;const t=e.touches;
+  if(t.length===2){g.d=dist(t);g.s=z.s;g.two=1}
+  else{g.x=t[0].clientX;g.y=t[0].clientY;g.zx=z.x;g.zy=z.y;g.moved=0;g.dx=g.dy=0;g.two=0}
+},{passive:true});
+stg0.addEventListener("touchmove",e=>{
+  if(!$("pvImg"))return;const t=e.touches;
+  if(t.length===2&&g.d){z.s=Math.min(5,Math.max(1,g.s*dist(t)/g.d));g.two=1;ap()}
+  else if(t.length===1&&!g.two){g.dx=t[0].clientX-g.x;g.dy=t[0].clientY-g.y;g.moved=Math.max(g.moved,Math.hypot(g.dx,g.dy));if(z.s>1){z.x=g.zx+g.dx;z.y=g.zy+g.dy;ap()}}
+},{passive:true});
+stg0.addEventListener("touchend",e=>{
+  if(!$("pvImg")||e.touches.length)return;
+  if(g.two){if(z.s<1.05){z.s=1;z.x=z.y=0}ap();g.two=0;g.d=0;return}
+  if(g.moved<10){
+    const n=Date.now();
+    if(n-tapT<300){clearTimeout(chromeT);tapT=0;if(z.s>1){z.s=1;z.x=z.y=0}else z.s=2.5;ap()}
+    else{tapT=n;chromeT=setTimeout(()=>$("pv").classList.toggle("pv-hide"),280)}
+  }else if(z.s===1&&Math.abs(g.dx)>60&&Math.abs(g.dy)<70)pvGo(g.dx<0?1:-1);
+},{passive:true});
+stg0.addEventListener("click",e=>{if(e.target.id==="pvStage")$("pv").classList.toggle("pv-hide")});
+</script>
+</body>
+</html>
