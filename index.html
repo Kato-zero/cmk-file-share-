@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -357,6 +358,77 @@ button {
 
 
 /* =========================================================
+   UPLOAD PROGRESS
+========================================================= */
+
+.upload-progress {
+    width: 100%;
+    max-width: 650px;
+    margin: 20px auto 0;
+    text-align: left;
+    background: #f8faf9;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 15px;
+}
+
+.upload-progress-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 9px;
+}
+
+.upload-progress-name {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.upload-progress-percent {
+    flex: 0 0 auto;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.progress-track {
+    width: 100%;
+    height: 9px;
+    background: #dfe8e4;
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: var(--green);
+    border-radius: 99px;
+    transition: width .15s linear;
+}
+
+.upload-progress-info {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.upload-progress-files {
+    margin-top: 9px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+
+/* =========================================================
    TABS
 ========================================================= */
 
@@ -681,6 +753,11 @@ button {
         margin-left: 58px;
     }
 
+    .upload-progress-info {
+        flex-direction: column;
+        gap: 3px;
+    }
+
 }
 
 </style>
@@ -947,6 +1024,65 @@ button {
                 Or drag and drop files here
             </p>
 
+
+            <!-- REAL UPLOAD PROGRESS -->
+
+            <div
+                id="uploadProgress"
+                class="upload-progress hidden"
+            >
+
+                <div class="upload-progress-top">
+
+                    <div
+                        id="uploadProgressName"
+                        class="upload-progress-name"
+                    >
+                        Uploading...
+                    </div>
+
+                    <div
+                        id="uploadProgressPercent"
+                        class="upload-progress-percent"
+                    >
+                        0%
+                    </div>
+
+                </div>
+
+
+                <div class="progress-track">
+
+                    <div
+                        id="uploadProgressBar"
+                        class="progress-bar"
+                    ></div>
+
+                </div>
+
+
+                <div class="upload-progress-info">
+
+                    <span id="uploadProgressSize">
+                        0 B / 0 B
+                    </span>
+
+                    <span id="uploadProgressSpeed">
+                        0 KB/s
+                    </span>
+
+                </div>
+
+
+                <div
+                    id="uploadProgressFiles"
+                    class="upload-progress-files"
+                >
+                    Preparing upload...
+                </div>
+
+            </div>
+
         </section>
 
 
@@ -1123,10 +1259,6 @@ button {
 
 /* =========================================================
    SUPABASE CONFIGURATION
-=========================================================
-
-   Replace these two values with your own Supabase project.
-
 ========================================================= */
 
 const SUPABASE_URL =
@@ -1248,6 +1380,46 @@ const toastContainer =
 
 
 /* =========================================================
+   UPLOAD PROGRESS DOM
+========================================================= */
+
+const uploadProgress =
+    document.getElementById(
+        "uploadProgress"
+    );
+
+const uploadProgressName =
+    document.getElementById(
+        "uploadProgressName"
+    );
+
+const uploadProgressPercent =
+    document.getElementById(
+        "uploadProgressPercent"
+    );
+
+const uploadProgressBar =
+    document.getElementById(
+        "uploadProgressBar"
+    );
+
+const uploadProgressSize =
+    document.getElementById(
+        "uploadProgressSize"
+    );
+
+const uploadProgressSpeed =
+    document.getElementById(
+        "uploadProgressSpeed"
+    );
+
+const uploadProgressFiles =
+    document.getElementById(
+        "uploadProgressFiles"
+    );
+
+
+/* =========================================================
    INITIALIZE
 ========================================================= */
 
@@ -1258,18 +1430,6 @@ document.addEventListener(
 
 
 async function initialize() {
-
-    if (
-        SUPABASE_URL.includes("YOUR_") ||
-        SUPABASE_ANON_KEY.includes("YOUR_")
-    ) {
-
-        console.warn(
-            "Add your Supabase URL and anon/publishable key."
-        );
-
-    }
-
 
     const {
         data
@@ -1737,6 +1897,123 @@ uploadBox.addEventListener(
 
 
 /* =========================================================
+   UPLOAD PROGRESS UI
+========================================================= */
+
+function showUploadProgress(
+    file,
+    index,
+    total
+) {
+
+    uploadProgress.classList.remove(
+        "hidden"
+    );
+
+    uploadProgressName.textContent =
+        file.name;
+
+    uploadProgressPercent.textContent =
+        "0%";
+
+    uploadProgressBar.style.width =
+        "0%";
+
+    uploadProgressSize.textContent =
+        `0 B / ${formatBytes(file.size)}`;
+
+    uploadProgressSpeed.textContent =
+        "0 KB/s";
+
+    uploadProgressFiles.textContent =
+        `File ${index + 1} of ${total}`;
+
+}
+
+
+function updateUploadProgress(
+    file,
+    index,
+    total,
+    loaded,
+    startedAt
+) {
+
+    const percent =
+        file.size > 0
+            ? Math.min(
+                100,
+                Math.round(
+                    (loaded / file.size) * 100
+                )
+            )
+            : 100;
+
+
+    const elapsedSeconds =
+        Math.max(
+            (Date.now() - startedAt) / 1000,
+            0.001
+        );
+
+
+    const bytesPerSecond =
+        loaded / elapsedSeconds;
+
+
+    uploadProgressPercent.textContent =
+        `${percent}%`;
+
+    uploadProgressBar.style.width =
+        `${percent}%`;
+
+    uploadProgressSize.textContent =
+        `${formatBytes(loaded)} / ${formatBytes(file.size)}`;
+
+    uploadProgressSpeed.textContent =
+        `${formatBytes(bytesPerSecond)}/s`;
+
+    uploadProgressFiles.textContent =
+        `Uploading file ${index + 1} of ${total}`;
+
+}
+
+
+function finishUploadProgress() {
+
+    uploadProgressPercent.textContent =
+        "100%";
+
+    uploadProgressBar.style.width =
+        "100%";
+
+    uploadProgressSpeed.textContent =
+        "Complete";
+
+}
+
+
+/* =========================================================
+   HIDE UPLOAD PROGRESS
+========================================================= */
+
+function hideUploadProgress() {
+
+    setTimeout(
+        () => {
+
+            uploadProgress.classList.add(
+                "hidden"
+            );
+
+        },
+        800
+    );
+
+}
+
+
+/* =========================================================
    UPLOAD FILES
 ========================================================= */
 
@@ -1747,25 +2024,41 @@ async function uploadFiles(files) {
     }
 
 
-    setLoading(true);
-
-
     let uploaded = 0;
 
 
-    for (const file of files) {
+    for (
+        let index = 0;
+        index < files.length;
+        index++
+    ) {
+
+        const file =
+            files[index];
+
+
+        showUploadProgress(
+            file,
+            index,
+            files.length
+        );
+
 
         try {
 
             const result =
                 await uploadSingleFile(
-                    file
+                    file,
+                    index,
+                    files.length
                 );
 
 
             if (result.success) {
 
                 uploaded++;
+
+                finishUploadProgress();
 
             } else {
 
@@ -1790,7 +2083,7 @@ async function uploadFiles(files) {
     }
 
 
-    setLoading(false);
+    hideUploadProgress();
 
 
     if (uploaded > 0) {
@@ -1813,10 +2106,14 @@ async function uploadFiles(files) {
 
 
 /* =========================================================
-   UPLOAD ONE FILE
+   UPLOAD ONE FILE WITH REAL PROGRESS
 ========================================================= */
 
-async function uploadSingleFile(file) {
+async function uploadSingleFile(
+    file,
+    index,
+    total
+) {
 
     const randomId =
         crypto.randomUUID();
@@ -1833,40 +2130,66 @@ async function uploadSingleFile(file) {
 
 
     /*
-       Upload the ORIGINAL FILE.
-       We do not resize, compress, convert
-       or modify the file.
+       Get the currently authenticated
+       Supabase access token.
     */
 
     const {
-        error: uploadError
+        data: sessionData
     } =
-        await supabaseClient.storage
-            .from(BUCKET)
-            .upload(
-                path,
-                file,
-                {
-                    cacheControl: "3600",
-                    upsert: false,
-                    contentType:
-                        file.type ||
-                        "application/octet-stream"
-                }
-            );
+        await supabaseClient.auth.getSession();
 
 
-    if (uploadError) {
+    const session =
+        sessionData?.session;
 
-        console.error(
-            "Storage upload error:",
-            uploadError
-        );
+
+    if (!session) {
 
         return {
             success: false,
             message:
-                uploadError.message
+                "Your session has expired. Please sign in again."
+        };
+
+    }
+
+
+    const accessToken =
+        session.access_token;
+
+
+    /*
+       Upload directly to Supabase Storage
+       using XMLHttpRequest.
+
+       XMLHttpRequest gives us the
+       upload.onprogress event.
+    */
+
+    try {
+
+        await uploadUsingXHR(
+            file,
+            path,
+            accessToken,
+            index,
+            total
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Storage upload error:",
+            error
+        );
+
+
+        return {
+            success: false,
+            message:
+                error.message ||
+                "Storage upload failed."
         };
 
     }
@@ -1934,6 +2257,217 @@ async function uploadSingleFile(file) {
     return {
         success: true
     };
+
+}
+
+
+/* =========================================================
+   XHR SUPABASE STORAGE UPLOAD
+========================================================= */
+
+function uploadUsingXHR(
+    file,
+    path,
+    accessToken,
+    index,
+    total
+) {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            const xhr =
+                new XMLHttpRequest();
+
+
+            /*
+               Supabase Storage object endpoint.
+            */
+
+            const encodedPath =
+                path
+                    .split("/")
+                    .map(
+                        segment =>
+                            encodeURIComponent(
+                                segment
+                            )
+                    )
+                    .join("/");
+
+
+            const uploadUrl =
+                `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(BUCKET)}/${encodedPath}`;
+
+
+            xhr.open(
+                "POST",
+                uploadUrl,
+                true
+            );
+
+
+            /*
+               Supabase authentication.
+            */
+
+            xhr.setRequestHeader(
+                "apikey",
+                SUPABASE_ANON_KEY
+            );
+
+            xhr.setRequestHeader(
+                "Authorization",
+                `Bearer ${accessToken}`
+            );
+
+
+            /*
+               Tell Supabase not to overwrite
+               another object.
+            */
+
+            xhr.setRequestHeader(
+                "x-upsert",
+                "false"
+            );
+
+
+            xhr.setRequestHeader(
+                "cache-control",
+                "3600"
+            );
+
+
+            xhr.setRequestHeader(
+                "Content-Type",
+                file.type ||
+                "application/octet-stream"
+            );
+
+
+            const startedAt =
+                Date.now();
+
+
+            /*
+               REAL UPLOAD PROGRESS.
+            */
+
+            xhr.upload.onprogress =
+                event => {
+
+                    if (!event.lengthComputable) {
+                        return;
+                    }
+
+
+                    updateUploadProgress(
+                        file,
+                        index,
+                        total,
+                        event.loaded,
+                        startedAt
+                    );
+
+                };
+
+
+            xhr.onload =
+                () => {
+
+                    if (
+                        xhr.status >= 200 &&
+                        xhr.status < 300
+                    ) {
+
+                        resolve();
+
+                        return;
+
+                    }
+
+
+                    let message =
+                        "Upload failed.";
+
+
+                    try {
+
+                        const response =
+                            JSON.parse(
+                                xhr.responseText
+                            );
+
+
+                        message =
+                            response.message ||
+                            response.error ||
+                            message;
+
+                    } catch {
+
+                        if (
+                            xhr.responseText
+                        ) {
+
+                            message =
+                                xhr.responseText;
+
+                        }
+
+                    }
+
+
+                    reject(
+                        new Error(
+                            message
+                        )
+                    );
+
+                };
+
+
+            xhr.onerror =
+                () => {
+
+                    reject(
+                        new Error(
+                            "Network error while uploading the file."
+                        )
+                    );
+
+                };
+
+
+            xhr.onabort =
+                () => {
+
+                    reject(
+                        new Error(
+                            "Upload was cancelled."
+                        )
+                    );
+
+                };
+
+
+            xhr.ontimeout =
+                () => {
+
+                    reject(
+                        new Error(
+                            "Upload timed out."
+                        )
+                    );
+
+                };
+
+
+            xhr.send(file);
+
+        }
+    );
 
 }
 
@@ -2425,9 +2959,11 @@ async function downloadFile(
 
         setTimeout(
             () => {
+
                 URL.revokeObjectURL(
                     url
                 );
+
             },
             1000
         );
@@ -2473,10 +3009,6 @@ async function deleteFile(
     setLoading(true);
 
 
-    /*
-       Delete storage object first.
-    */
-
     const {
         error: storageError
     } =
@@ -2505,11 +3037,6 @@ async function deleteFile(
 
     }
 
-
-    /*
-       Delete database record.
-       Cascading will remove file shares.
-    */
 
     const {
         error: databaseError
@@ -2594,7 +3121,9 @@ function openShare(
 
     setTimeout(
         () => {
+
             recipientEmail.focus();
+
         },
         100
     );
@@ -2871,9 +3400,11 @@ document
                         .querySelectorAll(".tab")
                         .forEach(
                             button => {
+
                                 button.classList.remove(
                                     "active"
                                 );
+
                             }
                         );
 
@@ -3383,3 +3914,4 @@ function friendlyAuthError(
 
 </body>
 </html>
+```
