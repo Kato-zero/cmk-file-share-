@@ -40,6 +40,7 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
 .group input:last-child{border-bottom:0}
 .group input::placeholder{color:var(--label2)}
 .btn{display:block;width:100%;padding:15px;border-radius:14px;background:var(--blue);color:#fff;font-size:17px;font-weight:600;margin-top:20px;transition:.15s}
+.btn.ghost{background:var(--fill);color:var(--blue);margin-top:12px}
 .btn:active{opacity:.6;transform:scale(.98)}.btn:disabled{opacity:.4}
 .note{margin:14px 6px 0;padding:12px 14px;border-radius:12px;font-size:14px;display:none}
 .note.show{display:block}.note.error{background:rgba(255,59,48,.14);color:var(--red)}.note.success{background:rgba(52,199,89,.16);color:var(--green)}
@@ -176,6 +177,7 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
     <div id="aNote" class="note"></div>
     <button class="btn" id="aBtn" type="submit">Sign In</button>
   </form>
+  <button class="btn ghost" id="authInstall" type="button">Install App</button>
 </div>
 
 <!-- APP -->
@@ -476,10 +478,11 @@ document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&user
 let dip=null;
 const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
-const canInstall=()=>!standalone()&&(!!dip||isIOS());
+const canInstall=()=>!standalone();
 function refreshInstall(){
   let x=false;try{x=localStorage.getItem("pd_inst_x")==="1"}catch{}
   $("install").classList.toggle("hidden",!canInstall()||x);
+  $("authInstall").classList.toggle("hidden",!canInstall());
 }
 async function installApp(){
   if(dip){
@@ -490,7 +493,7 @@ async function installApp(){
   if(isIOS())sheet("Install on iPhone","Tap the Share button in Safari, choose Add to Home Screen, then tap Add.",[{l:"Got It",f:()=>{}}]);
   else sheet("Install PrivateDrive","Open your browser menu and choose Install app or Add to Home screen.",[{l:"OK",f:()=>{}}]);
 }
-$("instBtn").onclick=installApp;
+$("instBtn").onclick=installApp;$("authInstall").onclick=installApp;
 $("instX").onclick=()=>{try{localStorage.setItem("pd_inst_x","1")}catch{}refreshInstall()};
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();dip=e;refreshInstall()});
 window.addEventListener("appinstalled",()=>{dip=null;refreshInstall();toast("PrivateDrive installed","success")});
