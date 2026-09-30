@@ -294,10 +294,27 @@ function renameSheet(it){inputSheet({title:"Rename",sub:"Only the display name c
 }})}
 function showAuth(){$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
 async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;await sweep();await load()}
+const HASH=location.hash+location.search;
+let pendingRecovery=/type=recovery/.test(HASH);
+function afterSession(){
+  if(!pendingRecovery)return;
+  pendingRecovery=false;
+  try{history.replaceState(null,"",location.pathname)}catch{}
+  newPwSheet();
+}
 (async()=>{
+  /* Register the listener first so the recovery event can't be missed. */
+  sb.auth.onAuthStateChange(async(ev,s)=>{
+    if(ev==="PASSWORD_RECOVERY")pendingRecovery=true;
+    if(s&&s.user){if(!user||user.id!==s.user.id)await showApp(s.user);afterSession()}
+    else if(ev==="SIGNED_OUT"||(ev==="INITIAL_SESSION"&&!s)){user=null;showAuth()}
+  });
   const{data}=await sb.auth.getSession();
-  data&&data.session?await showApp(data.session.user):showAuth();
-  sb.auth.onAuthStateChange(async(ev,s)=>{if(s&&s.user){if(!user||user.id!==s.user.id)await showApp(s.user);if(ev==="PASSWORD_RECOVERY")newPwSheet()}else{user=null;showAuth()}});
+  if(data&&data.session){if(!user)await showApp(data.session.user);afterSession()}
+  else{showAuth();
+    const m=/error_description=([^&]+)/.exec(HASH);
+    if(m){note($("aNote"),decodeURIComponent(m[1].replace(/\+/g," "))+". Request a new reset link.");try{history.replaceState(null,"",location.pathname)}catch{}}
+  }
 })();
 
 /* ---------- sheets ---------- */
