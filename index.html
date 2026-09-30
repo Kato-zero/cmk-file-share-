@@ -158,6 +158,21 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
 .loadmore{display:block;width:100%;margin-top:12px;padding:13px;border-radius:12px;background:var(--card);color:var(--blue);font-size:17px;font-weight:500}
 .loadmore:active{opacity:.6}
 .pcancel{color:var(--red);font-size:13px;font-weight:600;flex:none}
+.folders{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.fold{background:var(--card);border-radius:12px;padding:10px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:500;color:var(--label)}
+.fold svg{width:26px;height:26px;fill:none;stroke:var(--fc);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.fold small{font-size:11px;color:var(--label2);font-weight:400}
+.fold.on{background:var(--blue);color:#fff}.fold.on small{color:rgba(255,255,255,.8)}.fold.on svg{stroke:#fff}
+.fold:active{opacity:.6}
+.chipbar{margin:-6px 0 12px}.chipbar button{background:var(--fill);color:var(--blue);border-radius:14px;padding:6px 12px;font-size:14px}
+.gap{height:18px}
+.av{flex:0 0 40px;height:40px;border-radius:50%;color:#fff;font-weight:600;font-size:15px;display:flex;align-items:center;justify-content:center}
+.st{font-weight:600}.st.ok{color:var(--green)}.st.no{color:var(--red)}.st.wait{color:#ff9500}
+.tab{position:relative}
+.badge{position:absolute;top:-3px;left:calc(50% + 6px);background:var(--red);color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:flex;align-items:center;justify-content:center}
+.pick{display:flex;gap:8px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
+.chip{flex:none;padding:7px 14px;border-radius:16px;background:var(--fill);color:var(--label);font-size:14px}
+.chip.on{background:var(--blue);color:#fff}
 #loading{position:absolute;inset:0;z-index:90;display:flex;align-items:center;justify-content:center}
 .spin{width:44px;height:44px;border-radius:12px;background:rgba(40,40,42,.85);display:flex;align-items:center;justify-content:center}
 .spin i{width:22px;height:22px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
@@ -199,6 +214,7 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
     <h1 class="large" id="title">My Files</h1>
     <div id="install" class="inst hidden"><img src="icons/icon-192.png" alt=""><div><b>Install PrivateDrive</b>Add it to your home screen for full-screen access.</div><button class="pill" id="instBtn">Install</button><button class="x" id="instX" aria-label="Dismiss">&times;</button></div>
     <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search"></label>
+    <div id="folders" class="folders"></div><div id="pchip" class="chipbar hidden"><button id="pchipBtn"></button></div>
     <div class="hdr"><span id="count"></span><button id="sortBtn" aria-label="Sort order"></button></div>
     <div id="list"></div>
     <div class="foot" id="who"></div>
@@ -211,8 +227,9 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
   </div>
   <nav id="tabbar">
     <button class="tab on" data-tab="my"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Files</button>
-    <button class="tab" data-tab="shared"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>Shared With Me</button>
-    <button class="tab" data-tab="sent"><svg viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 19h14"/></svg>Shared By Me</button>
+    <button class="tab" data-tab="shared"><svg viewBox="0 0 24 24"><path d="M4 13V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7"/><path d="M4 13h4l1 3h6l1-3h4v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>Inbox<span class="badge hidden" id="badge"></span></button>
+    <button class="tab" data-tab="sent"><svg viewBox="0 0 24 24"><path d="m21 3-9.5 18-2.5-7.5L1.5 11z"/><path d="M21 3 9 13.5"/></svg>Sent</button>
+    <button class="tab" data-tab="people"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.5a5 5 0 0 1 5 5"/></svg>People</button>
   </nav>
 </div>
 
@@ -264,7 +281,7 @@ $("authForm").addEventListener("submit",async e=>{
   if(signup){$("authForm").reset();note(n,r.data&&r.data.session?"Account created.":"Account created. Check your email to confirm it.","success")}
   else $("authForm").reset();
 });
-$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
+$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Blocked Senders",f:blockedSheet},{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
 $("forgot").onclick=async()=>{
   const email=$("email").value.trim(),n=$("aNote");
   if(!email)return note(n,"Enter your email above first.");
@@ -276,12 +293,13 @@ $("forgot").onclick=async()=>{
 };
 function inputSheet(o){
   const ov=document.createElement("div");ov.className="ov";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
-  ov.innerHTML=`<div class="sheet full"><h3>${esc(o.title)}</h3><p>${esc(o.sub||"")}</p><div class="group"><input id="ifld" type="${o.type||"text"}" placeholder="${esc(o.ph||"")}" value="${esc(o.val||"")}" autocapitalize="none" autocomplete="${o.ac||"off"}"></div><div class="note" id="iNote"></div><button class="btn" id="iGo">${esc(o.btn||"Save")}</button><button class="cancel-l" id="iNo">Cancel</button></div>`;
-  const close=()=>ov.remove(),f=ov.querySelector("#ifld"),n=ov.querySelector("#iNote"),go=ov.querySelector("#iGo");
+  const fld=(id,c,v)=>`<input id="${id}" type="${c.type||"text"}" placeholder="${esc(c.ph||"")}" value="${esc(v||"")}" autocapitalize="none" autocomplete="${c.ac||"off"}">`;
+  ov.innerHTML=`<div class="sheet full"><h3>${esc(o.title)}</h3><p>${esc(o.sub||"")}</p><div class="group">${fld("ifld",o,o.val)}${o.f2?fld("ifld2",o.f2,o.f2.val):""}</div><div class="note" id="iNote"></div><button class="btn" id="iGo">${esc(o.btn||"Save")}</button><button class="cancel-l" id="iNo">Cancel</button></div>`;
+  const close=()=>ov.remove(),f=ov.querySelector("#ifld"),f2=ov.querySelector("#ifld2"),n=ov.querySelector("#iNote"),go=ov.querySelector("#iGo");
   ov.onclick=e=>{if(e.target===ov)close()};ov.querySelector("#iNo").onclick=close;
   $("phone").appendChild(ov);setTimeout(()=>{f.focus();f.select()},300);
-  const run=async()=>{go.disabled=true;try{const m=await o.onGo(o.type==="password"?f.value:f.value.trim());if(m)note(n,m);else close()}finally{go.disabled=false}};
-  go.onclick=run;f.onkeydown=e=>{if(e.key==="Enter")run()};
+  const run=async()=>{go.disabled=true;try{const m=await o.onGo(o.type==="password"?f.value:f.value.trim(),f2?f2.value.trim():"");if(m)note(n,m);else close()}finally{go.disabled=false}};
+  go.onclick=run;[f,f2].forEach(x=>{if(x)x.onkeydown=e=>{if(e.key==="Enter")run()}});
 }
 function newPwSheet(){inputSheet({title:"New Password",sub:"Choose a new password for your account.",type:"password",ph:"New password",ac:"new-password",btn:"Update Password",onGo:async v=>{if(v.length<6)return"Password must be at least 6 characters.";const{error}=await sb.auth.updateUser({password:v});if(error)return error.message;toast("Password updated","success")}})}
 function renameSheet(it){inputSheet({title:"Rename",sub:"Only the display name changes.",val:it.name,btn:"Rename",onGo:async v=>{
@@ -293,7 +311,7 @@ function renameSheet(it){inputSheet({title:"Rename",sub:"Only the display name c
   it.name=name;render();toast("Renamed","success");
 }})}
 function showAuth(){$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
-async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;await sweep();await load()}
+async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;refreshPeople();refreshBadge();await sweep();await load()}
 const HASH=location.hash+location.search;
 let pendingRecovery=/type=recovery/.test(HASH);
 function afterSession(){
@@ -330,13 +348,14 @@ function sheet(title,sub,acts){
 function shareSheet(it){
   const arr=Array.isArray(it)?it:[it];
   const ov=document.createElement("div");ov.className="ov";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
-  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Files":"File"}</h3><p>${esc(arr.length>1?arr.length+" files":arr[0].name)}</p><div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
+  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Files":"File"}</h3><p>${esc(arr.length>1?arr.length+" files":arr[0].name)}</p>${pickHtml()}<div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
   const close=()=>ov.remove();
   ov.onclick=e=>{if(e.target===ov)close()};
   $("phone").appendChild(ov);
   ov.querySelector("#sNo").onclick=close;
   setTimeout(()=>ov.querySelector("#rcpt").focus(),300);
   const go=ov.querySelector("#sGo"),sn=ov.querySelector("#sNote");
+  ov.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{ov.querySelector("#rcpt").value=c.dataset.e;ov.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===c))});
   go.onclick=async()=>{
     const email=ov.querySelector("#rcpt").value.trim().toLowerCase();
     if(!email)return note(sn,"Enter the recipient's email address.");
@@ -349,41 +368,77 @@ function shareSheet(it){
       }
       if(!ok)return note(sn,msg);
       toast(ok===arr.length?(arr.length>1?`Shared ${ok} files`:`Shared "${arr[0].name}"`):`Shared ${ok} of ${arr.length}: ${msg}`,ok===arr.length?"success":"error");
-      close();if(selMode)setSel(false);if(tab==="sent")load();
+      close();refreshPeople();if(selMode)setSel(false);if(tab==="sent")load();
     }catch(e){console.error(e);note(sn,"Something went wrong.")}
     finally{go.disabled=false;go.textContent="Share"}
   };
 }
 
 /* ---------- tabs & lists ---------- */
-const TITLES={my:"My Files",shared:"Shared With Me",sent:"Shared By Me"};
+const TITLES={my:"My Files",shared:"Shared With Me",sent:"Shared By Me",people:"People"};
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   if(t.dataset.tab===tab){$("scroll").scrollTo({top:0,behavior:"smooth"});return load()}
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
-  tab=t.dataset.tab;$("q").value="";load();
+  tab=t.dataset.tab;$("q").value="";cat="";personFilter="";load();
 });
 const PAGE=50,QUOTA=2*1024**3,SORTS={new:"Newest",old:"Oldest",name:"Name",size:"Size"};
-let loadTok=0,hasMore=false,sortKey="new",qTimer;
+const CATS={
+  photos:{l:"Photos",c:"#ff9500",i:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-8 8"/>',x:["jpg","jpeg","png","gif","webp","bmp","svg","heic","heif","avif"]},
+  videos:{l:"Videos",c:"#af52de",i:'<rect x="3" y="6" width="14" height="12" rx="2"/><path d="m17 10 4-2v8l-4-2"/>',x:["mp4","mov","m4v","avi","mkv","webm"]},
+  docs:{l:"Documents",c:"#007aff",i:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',x:["pdf","doc","docx","txt","rtf","md","odt","xls","xlsx","csv","ppt","pptx","pages","numbers","key"]},
+  other:{l:"Other",c:"#8e8e93",i:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',x:[]}
+};
+const ALLX=[].concat(CATS.photos.x,CATS.videos.x,CATS.docs.x);
+let loadTok=0,hasMore=false,sortKey="new",qTimer,cat="",cntTab="",cnt={},personFilter="",pend=[],contacts=[],recents=[],shareEmail={},peopleErr="";
 try{sortKey=localStorage.getItem("pd_sort")||"new"}catch{}
 if(!SORTS[sortKey])sortKey="new";
-const mapRow=f=>tab==="my"?{id:f.id,name:f.original_name,size:f.file_size,date:f.created_at,path:f.storage_path,exp:f.expires_at}:{id:f.id,name:f.file_name,size:f.file_size,date:f.created_at,path:f.storage_path};
+const mapRow=f=>tab==="my"?{id:f.id,name:f.original_name,size:f.file_size,date:f.created_at,path:f.storage_path,exp:f.expires_at}:{id:f.id,sid:String(f.id),status:f.status,name:f.file_name,size:f.file_size,date:f.created_at,path:f.storage_path};
+function baseQ(sel,opt){
+  if(tab==="my")return sb.from("files").select(sel,opt).eq("owner_id",user.id);
+  if(tab==="shared")return sb.from("file_shares").select(sel,opt).eq("recipient_id",user.id).eq("status","approved");
+  return sb.from("file_shares").select(sel,opt).eq("owner_id",user.id);
+}
+function catQ(qy,col,k){
+  if(!k)return qy;
+  if(k==="other"){ALLX.forEach(e=>{qy=qy.not(col,"ilike",`*.${e}`)});return qy}
+  return qy.or(CATS[k].x.map(e=>`${col}.ilike.*.${e}`).join(","));
+}
 async function load(more=false){
-  const tok=++loadTok;
-  $("selBtn").classList.toggle("hidden",tab==="shared");updateSel();
-  $("sortBtn").textContent="Sort: "+SORTS[sortKey];
-  if(!more){items=[];hasMore=false;$("list").innerHTML=`<div class="empty"><span>Loading…</span></div>`}
+  const tok=++loadTok,pp=tab==="people";
+  $("selBtn").classList.toggle("hidden",tab==="shared"||pp);updateSel();
+  $("sortBtn").textContent="Sort: "+SORTS[sortKey];$("sortBtn").classList.toggle("hidden",pp);
+  $("folders").classList.toggle("hidden",pp);
+  $("pchip").classList.toggle("hidden",!(tab==="sent"&&personFilter));
+  if(cntTab!==tab){cnt={};cntTab=tab}
+  if(pp){$("list").innerHTML=`<div class="empty"><span>Loading…</span></div>`;await refreshPeople();if(tok===loadTok)renderPeople();return}
+  if(!more){items=[];pend=[];hasMore=false;renderFolders();$("list").innerHTML=`<div class="empty"><span>Loading…</span></div>`}
   const my=tab==="my",nc=my?"original_name":"file_name",from=more?items.length:0;
-  let qy=my?sb.from("files").select("*").eq("owner_id",user.id):sb.from("file_shares").select("*").eq(tab==="shared"?"recipient_id":"owner_id",user.id);
+  let qy=baseQ("*");
   const q=$("q").value.trim();
   if(q)qy=qy.ilike(nc,`%${q.replace(/[\\%_]/g,"\\$&")}%`);
+  qy=catQ(qy,nc,cat);
   const col={new:["created_at",false],old:["created_at",true],name:[nc,true],size:["file_size",false]}[sortKey];
-  const r=await qy.order(col[0],{ascending:col[1]}).range(from,from+PAGE-1);
+  const pq=tab==="shared"&&!more?sb.from("file_shares").select("*").eq("recipient_id",user.id).eq("status","pending").order("created_at",{ascending:false}).limit(100):null;
+  const [r,pr]=await Promise.all([qy.order(col[0],{ascending:col[1]}).range(from,from+PAGE-1),pq]);
   if(tok!==loadTok)return;
-  if(r.error){console.error(r.error);$("count").textContent="";return $("list").innerHTML=emptyHtml("Couldn't load files",r.error.message)}
+  if(r.error){console.error(r.error);$("count").textContent="";return $("list").innerHTML=emptyHtml("Couldn't load files",r.error.message+(/status/.test(r.error.message)?" (run setup-sharing.sql)":""))}
+  if(pr&&!pr.error)pend=(pr.data||[]).map(mapRow);
   const raw=r.data||[];hasMore=raw.length===PAGE;
   const rows=raw.filter(f=>!f.expires_at||new Date(f.expires_at)>Date.now()).map(mapRow);
   items=more?items.concat(rows):rows;
-  render();thumbs();if(my&&!more)usage();
+  if(tab!=="my"&&!more){await refreshPeople();if(tok!==loadTok)return}
+  render();thumbs();
+  if(!more){counts();refreshBadge();if(my)usage()}
+}
+async function counts(){
+  const t=tab;if(t==="people")return;
+  const ks=Object.keys(CATS),col=t==="my"?"original_name":"file_name";
+  const res=await Promise.all(ks.map(k=>catQ(baseQ("id",{count:"exact",head:true}),col,k)));
+  if(tab!==t)return;
+  ks.forEach((k,i)=>{if(!res[i].error)cnt[k]=res[i].count});renderFolders();
+}
+function renderFolders(){
+  $("folders").innerHTML=Object.keys(CATS).map(k=>`<button class="fold${cat===k?" on":""}" data-c="${k}" style="--fc:${CATS[k].c}" aria-pressed="${cat===k}"><svg viewBox="0 0 24 24">${CATS[k].i}</svg>${CATS[k].l}<small>${cnt[k]==null?"…":cnt[k]}</small></button>`).join("");
 }
 async function usage(){
   const{data,error}=await sb.from("files").select("file_size").eq("owner_id",user.id).limit(5000);
@@ -391,21 +446,37 @@ async function usage(){
   $("who").textContent=`${user.email||""} · ${bytes(data.reduce((a,f)=>a+(f.file_size||0),0))} of ${bytes(QUOTA)} used`;
 }
 function emptyHtml(t,s){return`<div class="empty"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><b>${esc(t)}</b><span>${esc(s)}</span></div>`}
-function render(){
-  const q=$("q").value.trim().toLowerCase();
-  const rows=items.map((it,i)=>({it,i}));
-  const unit=tab==="sent"?"share":"file";
-  $("count").textContent=rows.length?`${rows.length}${hasMore?"+":""} ${unit}${rows.length===1&&!hasMore?"":"s"}`:"";
-  if(!rows.length){
-    const m={my:["No Files Yet","Tap + to upload from this phone."],shared:["Nothing Shared With You","Files shared to your account appear here."],sent:["Nothing Shared Yet","Share a file from My Files to see it here."]}[tab];
-    return $("list").innerHTML=q?emptyHtml("No Results",`Nothing matches “${q}”.`):emptyHtml(...m);
-  }
-  $("list").innerHTML=`<div class="list${selMode?" selmode":""}">${rows.map(({it,i})=>{const k=kind(it.name);return`<div class="row${selSet.has(it.id)?" on":""}" data-i="${i}" role="button" tabindex="0"><div class="chk"></div><div class="ico" ${ptype(it.name)==="image"?`data-p="${esc(it.path)}"`:""} style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(it.name)}</div><div class="r-meta">${bytes(it.size)} · ${when(it.date)}${it.exp?` · <span class="exp">${left(it.exp)}</span>`:""}</div></div><button class="more" aria-label="Options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>`}).join("")}</div>${hasMore?'<button class="loadmore" id="moreBtn">Load More</button>':""}`;applyThumbs();
+function pm(it){
+  const e=shareEmail[it.sid];if(tab==="my"||!e)return"";
+  const nm=esc(who(e));
+  if(tab==="shared")return` · From ${nm}`;
+  if(!it.status)return` · To ${nm}`;
+  const st=it.status==="approved"?["Accepted","ok"]:it.status==="declined"?["Declined","no"]:["Pending","wait"];
+  return` · To ${nm} · <span class="st ${st[1]}">${st[0]}</span>`;
 }
-$("q").addEventListener("input",()=>{clearTimeout(qTimer);qTimer=setTimeout(()=>load(),300)});
+function render(){
+  const q=$("q").value.trim();
+  renderFolders();
+  const unit=tab==="sent"?"share":"file";
+  const rows=items.map((it,i)=>({it,i})).filter(({it})=>tab!=="sent"||!personFilter||shareEmail[it.sid]===personFilter);
+  const showPend=tab==="shared"&&pend.length&&!cat&&!q;
+  $("pchip").classList.toggle("hidden",!(tab==="sent"&&personFilter));
+  if(personFilter)$("pchipBtn").textContent=`Sent to ${who(personFilter)}  ✕`;
+  $("count").textContent=rows.length?`${rows.length}${hasMore?"+":""} ${unit}${rows.length===1&&!hasMore?"":"s"}`:"";
+  if(!rows.length&&!showPend){
+    const m={my:["No Files Yet","Tap + to upload from this phone."],shared:["Nothing Shared With You","Files you accept appear here."],sent:["Nothing Shared Yet","Share a file from My Files to see it here."]}[tab];
+    return $("list").innerHTML=(q||cat)?emptyHtml("No Results",q?`Nothing matches “${q}”.`:`No ${CATS[cat].l.toLowerCase()} here yet.`):emptyHtml(...m);
+  }
+  const pendHtml=showPend?`<div class="hdr"><span>Requests · ${pend.length}</span></div><div class="list">${pend.map((p,i)=>{const k=kind(p.name),e=shareEmail[p.sid];return`<div class="row" data-pd="${i}" role="button" tabindex="0"><div class="ico" style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(p.name)}</div><div class="r-meta">${e?`From ${esc(who(e))} · `:""}${bytes(p.size)} · ${when(p.date)}</div></div><span class="pill">Review</span></div>`}).join("")}</div><div class="gap"></div>${rows.length?'<div class="hdr"><span>Files</span></div>':""}`:"";
+  const listHtml=rows.length?`<div class="list${selMode?" selmode":""}">${rows.map(({it,i})=>{const k=kind(it.name);return`<div class="row${selSet.has(it.id)?" on":""}" data-i="${i}" role="button" tabindex="0"><div class="chk"></div><div class="ico" ${ptype(it.name)==="image"?`data-p="${esc(it.path)}"`:""} style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(it.name)}</div><div class="r-meta">${bytes(it.size)} · ${when(it.date)}${it.exp?` · <span class="exp">${left(it.exp)}</span>`:""}${pm(it)}</div></div><button class="more" aria-label="Options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>`}).join("")}</div>${hasMore?'<button class="loadmore" id="moreBtn">Load More</button>':""}`:"";
+  $("list").innerHTML=pendHtml+listHtml;applyThumbs();
+}
+$("q").addEventListener("input",()=>{if(tab==="people")return renderPeople();clearTimeout(qTimer);qTimer=setTimeout(()=>load(),300)});
 $("list").addEventListener("click",e=>{
   if(e.target.id==="moreBtn")return load(true);
   const b=e.target.closest(".row");if(!b)return;
+  if(b.dataset.pk)return personAction(b.dataset.pk,b.dataset.pv);
+  if(b.dataset.pd!==undefined)return decideSheet(pend[+b.dataset.pd]);
   const it=items[b.dataset.i];
   if(selMode){selSet.has(it.id)?selSet.delete(it.id):selSet.add(it.id);b.classList.toggle("on");return updateSel()}
   if(!e.target.closest(".more")&&ptype(it.name))return openPv(it);
@@ -414,7 +485,7 @@ $("list").addEventListener("click",e=>{
 function actions(it){
   const sub=`${bytes(it.size)} · ${when(it.date)}`;
   if(tab==="my")sheet(it.name,sub,[{l:"Download",f:()=>download(it)},{l:"Share…",f:()=>shareSheet(it)},{l:"Rename…",f:()=>renameSheet(it)},{l:"Auto-Delete…",f:()=>expSheet(it)},{l:"Delete",d:1,f:()=>sheet(`Delete “${it.name}”?`,"This permanently removes the file and its shares.",[{l:"Delete File",d:1,f:()=>del(it)}])}]);
-  else if(tab==="shared")sheet(it.name,sub,[{l:"Download",f:()=>download(it)}]);
+  else if(tab==="shared"){const e=shareEmail[it.sid];sheet(it.name,sub,[{l:"Download",f:()=>download(it)},...(e&&!contacts.some(c=>c.email===e)?[{l:"Save Sender to People…",f:()=>personSheet(e)}]:[])])}
   else sheet(it.name,sub,[{l:"Remove Access",d:1,f:()=>revoke(it)}]);
 }
 const scr=$("scroll");scr.addEventListener("scroll",()=>$("nav").classList.toggle("solid",scr.scrollTop>38),{passive:true});
@@ -454,7 +525,7 @@ async function revoke(it){
 }
 
 /* ---------- upload ---------- */
-$("addBtn").onclick=()=>$("fileInput").click();
+$("addBtn").onclick=()=>tab==="people"?personSheet():$("fileInput").click();
 $("fileInput").addEventListener("change",async e=>{const f=Array.from(e.target.files||[]);if(f.length)await uploadFiles(f);e.target.value=""});
 ["dragenter","dragover"].forEach(n=>scr.addEventListener(n,e=>{e.preventDefault();scr.classList.add("drag")}));
 ["dragleave","drop"].forEach(n=>scr.addEventListener(n,e=>{e.preventDefault();scr.classList.remove("drag")}));
@@ -547,6 +618,87 @@ async function makeThumb(file){
     if(bmp.close)bmp.close();
     return await new Promise(r=>c.toBlob(r,"image/jpeg",.75));
   }catch{return null}
+}
+
+/* ---------- people, requests ---------- */
+const AV=["#ff9500","#34c759","#007aff","#af52de","#ff2d55","#5ac8fa","#ff6b35"];
+const av=t=>{let h=0;for(const c of t)h=(h*31+c.charCodeAt(0))>>>0;return AV[h%AV.length]};
+const initials=(n,e)=>((n||e||"?").trim().split(/[\s@.]+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("")||"?").toUpperCase();
+const who=e=>{if(!e)return"Someone";const c=contacts.find(x=>x.email===e);return c&&c.name?c.name:e};
+async function refreshPeople(){
+  const[c,p]=await Promise.all([sb.from("contacts").select("*").eq("owner_id",user.id),sb.rpc("share_people")]);
+  if(!c.error)contacts=(c.data||[]).map(x=>({id:x.id,email:(x.email||"").toLowerCase(),name:x.name||""}));
+  peopleErr=c.error?c.error.message:"";
+  shareEmail={};const rec=[];
+  if(!p.error)(p.data||[]).forEach(r=>{const e=(r.email||"").toLowerCase();shareEmail[String(r.share_id)]=e;if(r.direction==="to")rec.push(e)});
+  recents=[...new Set(rec)].filter(e=>!contacts.some(c=>c.email===e));
+}
+function renderPeople(){
+  const q=$("q").value.trim().toLowerCase();
+  const cs=contacts.filter(x=>!q||x.name.toLowerCase().includes(q)||x.email.includes(q)).sort((a,b)=>(a.name||a.email).localeCompare(b.name||b.email));
+  const rs=recents.filter(e=>!q||e.includes(q));
+  $("count").textContent=cs.length?`${cs.length} ${cs.length===1?"person":"people"}`:"";
+  if(peopleErr&&!contacts.length)return $("list").innerHTML=emptyHtml("Couldn't load people",peopleErr+" (run setup-sharing.sql)");
+  if(!cs.length&&!rs.length)return $("list").innerHTML=q?emptyHtml("No Results",`Nothing matches “${$("q").value.trim()}”.`):emptyHtml("No People Yet","Tap + to save someone you share files with.");
+  const row=(k,name,email,right)=>`<div class="row" data-pk="${k}" data-pv="${esc(email)}" role="button" tabindex="0"><div class="av" style="background:${av(email)}">${esc(initials(name,email))}</div><div class="r-info"><div class="r-name">${esc(name||email)}</div>${name?`<div class="r-meta">${esc(email)}</div>`:""}</div>${right}</div>`;
+  const chev='<svg class="chev" viewBox="0 0 8 14"><path d="m1 1 6 6-6 6"/></svg>';
+  $("list").innerHTML=(cs.length?`<div class="hdr"><span>Saved</span></div><div class="list">${cs.map(c=>row("c",c.name,c.email,chev)).join("")}</div>`:"")+(rs.length?`<div class="gap"></div><div class="hdr"><span>Recently shared with</span></div><div class="list">${rs.map(e=>row("r","",e,'<span class="pill">Save</span>')).join("")}</div>`:"");
+}
+function personAction(k,email){
+  if(k==="r")return sheet(email,"Not saved yet",[{l:"Save to People…",f:()=>personSheet(email)},{l:"Files You Sent Them",f:()=>viewPerson(email)}]);
+  const c=contacts.find(x=>x.email===email);if(!c)return;
+  sheet(c.name||c.email,c.email,[{l:"Files You Sent Them",f:()=>viewPerson(c.email)},{l:"Rename…",f:()=>renameContact(c)},{l:"Remove Person",d:1,f:()=>sheet(`Remove ${c.name||c.email}?`,"Files you already shared stay shared.",[{l:"Remove Person",d:1,f:()=>delContact(c)}])}]);
+}
+function viewPerson(email){personFilter=email;gotoTab("sent")}
+function gotoTab(t){document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x.dataset.tab===t));tab=t;cat="";$("q").value="";load()}
+$("pchipBtn").onclick=()=>{personFilter="";render()};
+$("folders").addEventListener("click",e=>{const b=e.target.closest(".fold");if(!b)return;cat=cat===b.dataset.c?"":b.dataset.c;load()});
+function personSheet(prefill=""){inputSheet({title:"Add Person",sub:"Save someone you share files with.",ph:"Name (optional)",f2:{ph:"Email",type:"email",val:prefill},btn:"Save",onGo:async(name,email)=>{
+  email=email.toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return"Enter a valid email address.";
+  if(email===(user.email||"").toLowerCase())return"That's your own email.";
+  const{error}=await sb.from("contacts").insert({owner_id:user.id,email,name:name||null});
+  if(error)return error.code==="23505"?"That person is already saved.":(/contacts/.test(error.message)?"Run setup-sharing.sql first.":error.message);
+  await refreshPeople();if(tab==="people")renderPeople();else if(tab!=="my")render();toast("Person saved","success");
+}})}
+function renameContact(c){inputSheet({title:"Rename",sub:c.email,val:c.name,ph:"Name",btn:"Save",onGo:async name=>{
+  const{error}=await sb.from("contacts").update({name:name||null}).eq("id",c.id).eq("owner_id",user.id);
+  if(error)return error.message;
+  c.name=name;renderPeople();toast("Saved","success");
+}})}
+async function delContact(c){
+  const{error}=await sb.from("contacts").delete().eq("id",c.id).eq("owner_id",user.id);
+  if(error)return toast(error.message,"error");
+  contacts=contacts.filter(x=>x.id!==c.id);await refreshPeople();renderPeople();toast("Removed","success");
+}
+function pickHtml(){
+  const p=[...contacts.map(c=>({e:c.email,n:c.name})),...recents.map(e=>({e,n:""}))].slice(0,30);
+  return p.length?`<div class="pick">${p.map(x=>`<button type="button" class="chip" data-e="${esc(x.e)}">${esc(x.n||x.e)}</button>`).join("")}</div>`:"";
+}
+function decideSheet(p){
+  if(!p)return;const e=shareEmail[p.sid];
+  sheet(`${who(e)} wants to share a file`,`${p.name} · ${bytes(p.size)}`,[{l:"Accept",f:()=>respond(p,"accept")},{l:"Decline",d:1,f:()=>respond(p,"decline")},{l:"Decline & Block Sender",d:1,f:()=>respond(p,"block")}]);
+}
+async function respond(p,act){
+  busy(true);const{data,error}=await sb.rpc("respond_to_share",{p_share_id:p.sid,p_action:act});busy(false);
+  if(error||!(data&&data.success))return toast(error?error.message:(data&&data.message)||"Couldn't update.","error");
+  toast(act==="accept"?"Accepted":act==="decline"?"Declined":"Sender blocked","success");
+  load();
+}
+async function refreshBadge(){
+  if(!user)return;
+  const{count,error}=await sb.from("file_shares").select("id",{count:"exact",head:true}).eq("recipient_id",user.id).eq("status","pending");
+  if(error)return;
+  const n=count||0;$("badge").textContent=n>99?"99+":n;$("badge").classList.toggle("hidden",!n);
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user)refreshBadge()});
+setInterval(()=>{if(user&&!document.hidden)refreshBadge()},60000);
+async function blockedSheet(){
+  busy(true);const{data,error}=await sb.rpc("list_blocked");busy(false);
+  if(error)return toast("Run setup-sharing.sql first.","error");
+  const rows=data||[];
+  if(!rows.length)return sheet("Blocked Senders","No one is blocked.",[{l:"OK",f:()=>{}}]);
+  sheet("Blocked Senders","Tap a person to unblock them.",rows.slice(0,8).map(r=>({l:r.email,f:async()=>{const x=await sb.rpc("unblock_sender",{p_blocked_id:String(r.blocked_id)});x.error?toast(x.error.message,"error"):toast("Unblocked","success")}})));
 }
 
 /* ---------- sort & keyboard ---------- */
