@@ -405,7 +405,7 @@ function catQ(qy,col,k){
 }
 async function load(more=false){
   const tok=++loadTok,pp=tab==="people";
-  $("selBtn").classList.toggle("hidden",tab==="shared"||pp);updateSel();
+  $("selBtn").classList.toggle("hidden",pp);updateSel();
   $("sortBtn").textContent="Sort: "+SORTS[sortKey];$("sortBtn").classList.toggle("hidden",pp);
   $("folders").classList.toggle("hidden",pp);
   $("pchip").classList.toggle("hidden",!(tab==="sent"&&personFilter));
@@ -485,7 +485,7 @@ $("list").addEventListener("click",e=>{
 function actions(it){
   const sub=`${bytes(it.size)} · ${when(it.date)}`;
   if(tab==="my")sheet(it.name,sub,[{l:"Download",f:()=>download(it)},{l:"Share…",f:()=>shareSheet(it)},{l:"Rename…",f:()=>renameSheet(it)},{l:"Auto-Delete…",f:()=>expSheet(it)},{l:"Delete",d:1,f:()=>sheet(`Delete “${it.name}”?`,"This permanently removes the file and its shares.",[{l:"Delete File",d:1,f:()=>del(it)}])}]);
-  else if(tab==="shared"){const e=shareEmail[it.sid];sheet(it.name,sub,[{l:"Download",f:()=>download(it)},...(e&&!contacts.some(c=>c.email===e)?[{l:"Save Sender to People…",f:()=>personSheet(e)}]:[])])}
+  else if(tab==="shared"){const e=shareEmail[it.sid];sheet(it.name,sub,[{l:"Download",f:()=>download(it)},...(e&&!contacts.some(c=>c.email===e)?[{l:"Save Sender to People…",f:()=>personSheet(e)}]:[]),{l:"Remove from My Files",d:1,f:()=>sheet(`Remove “${it.name}”?`,"It will be removed from your inbox. The sender keeps their original.",[{l:"Remove",d:1,f:()=>removeShared(it)}])}])}
   else sheet(it.name,sub,[{l:"Remove Access",d:1,f:()=>revoke(it)}]);
 }
 const scr=$("scroll");scr.addEventListener("scroll",()=>$("nav").classList.toggle("solid",scr.scrollTop>38),{passive:true});
@@ -522,6 +522,14 @@ async function revoke(it){
   busy(false);
   if(error){console.error(error);return toast(error.message,"error")}
   toast("Access removed","success");load();
+}
+async function removeShared(it){
+  closePv();busy(true);
+  const{data,error}=await sb.from("file_shares").delete().eq("id",it.id).eq("recipient_id",user.id).select("id");
+  busy(false);
+  if(error){console.error(error);return toast(error.message,"error")}
+  if(!data||!data.length)return toast("Couldn't remove. Add the delete policy on file_shares.","error");
+  toast("File removed","success");load();
 }
 
 /* ---------- upload ---------- */
@@ -829,7 +837,7 @@ function setSel(on){
   $("settings").classList.toggle("hidden",on);$("addBtn").classList.toggle("hidden",on);$("allBtn").classList.toggle("hidden",!on);
   $("tabbar").classList.toggle("hidden",on);$("selbar").classList.toggle("hidden",!on);
   $("shBtn").classList.toggle("hidden",tab!=="my");
-  $("delBtn").textContent=tab==="sent"?"Remove Access":"Delete";
+  $("delBtn").textContent=tab==="sent"?"Remove Access":tab==="shared"?"Remove":"Delete";
   render();updateSel();
 }
 function updateSel(){
@@ -843,17 +851,24 @@ $("selBtn").onclick=()=>setSel(!selMode);
 $("allBtn").onclick=()=>{const v=vis(),all=v.every(x=>selSet.has(x.id));v.forEach(x=>all?selSet.delete(x.id):selSet.add(x.id));render();updateSel()};
 $("shBtn").onclick=()=>{const a=items.filter(x=>selSet.has(x.id));if(a.length)shareSheet(a)};
 $("delBtn").onclick=()=>{
-  const arr=items.filter(x=>selSet.has(x.id)),n=arr.length,sent=tab==="sent";if(!n)return;
-  sheet(sent?`Remove access for ${n} share${n>1?"s":""}?`:`Delete ${n} file${n>1?"s":""}?`,sent?"Recipients will no longer see them.":"This permanently removes the files and their shares.",[{l:sent?"Remove Access":"Delete",d:1,f:async()=>{
-    busy(true);let ok=0,err="";
-    for(const it of arr){
-      const r=sent?await sb.from("file_shares").delete().eq("id",it.id).eq("owner_id",user.id):await purge(it.id,it.path);
-      if(r&&r.error)err=r.error.message;else ok++;
-    }
-    busy(false);setSel(false);
-    toast(ok===n?(sent?"Access removed":`${n} file${n>1?"s":""} deleted`):`${ok} of ${n} done: ${err}`,ok===n?"success":"error");
-    load();
-  }}]);
+  const arr=items.filter(x=>selSet.has(x.id)),n=arr.length,sent=tab==="sent",rcv=tab==="shared";if(!n)return;
+  const s=n>1?"s":"";
+  sheet(
+    sent?`Remove access for ${n} share${s}?`:rcv?`Remove ${n} file${s} from your inbox?`:`Delete ${n} file${s}?`,
+    sent?"Recipients will no longer see them.":rcv?"The senders keep their originals.":"This permanently removes the files and their shares.",
+    [{l:sent?"Remove Access":rcv?"Remove":"Delete",d:1,f:async()=>{
+      busy(true);let ok=0,err="";
+      for(const it of arr){
+        let r;
+        if(sent)r=await sb.from("file_shares").delete().eq("id",it.id).eq("owner_id",user.id);
+        else if(rcv){r=await sb.from("file_shares").delete().eq("id",it.id).eq("recipient_id",user.id).select("id");if(!r.error&&!(r.data&&r.data.length))r={error:{message:"Add the delete policy on file_shares."}}}
+        else r=await purge(it.id,it.path);
+        if(r&&r.error)err=r.error.message;else ok++;
+      }
+      busy(false);setSel(false);
+      toast(ok===n?(sent?"Access removed":rcv?`${n} file${s} removed`:`${n} file${s} deleted`):`${ok} of ${n} done: ${err}`,ok===n?"success":"error");
+      load();
+    }}]);
 };
 $("q").addEventListener("input",()=>{if(selMode)updateSel()});
 
