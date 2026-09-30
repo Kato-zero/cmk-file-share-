@@ -179,9 +179,6 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
 @keyframes rot{to{transform:rotate(360deg)}}
 @keyframes fade{from{opacity:0}}@keyframes up{from{transform:translateY(110%)}}@keyframes drop{from{transform:translateY(-40px);opacity:0}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-.planbar{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:11px 14px;margin:0 0 14px;width:100%;text-align:left;font-size:14px}
-.planbar b{font-weight:700}.planbar span{color:var(--label2);flex:1}.planbar i{font-style:normal;flex:none}
-.planbar.warn{background:rgba(255,149,0,.16)}.planbar.warn span{color:#ff9500}
 </style>
 </head>
 <body>
@@ -215,7 +212,6 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
   </div></div>
   <div id="scroll">
     <h1 class="large" id="title">My Files</h1>
-    <button id="planBar" class="planbar hidden"></button>
     <div id="install" class="inst hidden"><img src="icons/icon-192.png" alt=""><div><b>Install PrivateDrive</b>Add it to your home screen for full-screen access.</div><button class="pill" id="instBtn">Install</button><button class="x" id="instX" aria-label="Dismiss">&times;</button></div>
     <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search"></label>
     <div id="folders" class="folders"></div><div id="pchip" class="chipbar hidden"><button id="pchipBtn"></button></div>
@@ -285,7 +281,7 @@ $("authForm").addEventListener("submit",async e=>{
   if(signup){$("authForm").reset();note(n,r.data&&r.data.session?"Account created.":"Account created. Check your email to confirm it.","success")}
   else $("authForm").reset();
 });
-$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Notifications: "+(pushState?"On":"Off"),f:pushToggle},{l:"Plan: "+planLabel(),f:planSheet},{l:"Blocked Senders",f:blockedSheet},{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Reload App",f:reloadApp},{l:"Sign Out",d:1,f:async()=>{busy(true);if(pushState)await pushOff(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
+$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Notifications: "+(pushState?"On":"Off"),f:pushToggle},{l:"Blocked Senders",f:blockedSheet},{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);if(pushState)await pushOff(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
 $("forgot").onclick=async()=>{
   const email=$("email").value.trim(),n=$("aNote");
   if(!email)return note(n,"Enter your email above first.");
@@ -315,7 +311,7 @@ function renameSheet(it){inputSheet({title:"Rename",sub:"Only the display name c
   it.name=name;render();toast("Renamed","success");
 }})}
 function showAuth(){stopRealtime();$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
-async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;refreshPeople();refreshBadge();startRealtime();syncPush();loadPlan();loadConfig();resumePayments();await sweep();await load();const qt=new URLSearchParams(location.search).get("tab");if(qt&&TITLES[qt]){try{history.replaceState(null,"",location.pathname)}catch{}gotoTab(qt)}}
+async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;refreshPeople();refreshBadge();startRealtime();syncPush();await sweep();await load();const qt=new URLSearchParams(location.search).get("tab");if(qt&&TITLES[qt]){try{history.replaceState(null,"",location.pathname)}catch{}gotoTab(qt)}}
 const HASH=location.hash+location.search;
 let pendingRecovery=/type=recovery/.test(HASH);
 function afterSession(){
@@ -352,7 +348,7 @@ function sheet(title,sub,acts){
 function shareSheet(it){
   const arr=Array.isArray(it)?it:[it];
   const ov=document.createElement("div");ov.className="ov";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
-  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Files":"File"}</h3><p>${esc((arr.length>1?arr.length+" files":arr[0].name)+shareHint())}</p>${pickHtml()}<div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
+  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Files":"File"}</h3><p>${esc(arr.length>1?arr.length+" files":arr[0].name)}</p>${pickHtml()}<div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
   const close=()=>ov.remove();
   ov.onclick=e=>{if(e.target===ov)close()};
   $("phone").appendChild(ov);
@@ -370,9 +366,9 @@ function shareSheet(it){
         const{data,error}=await sb.rpc("share_file",{p_file_id:f.id,p_recipient_email:email});
         if(error)msg=error.message;else if(!data||!data.success)msg=(data&&data.message)||"The file could not be shared.";else ok++;
       }
-      if(!ok){loadPlan();return note(sn,msg)}
+      if(!ok)return note(sn,msg);
       toast(ok===arr.length?(arr.length>1?`Shared ${ok} files`:`Shared "${arr[0].name}"`):`Shared ${ok} of ${arr.length}: ${msg}`,ok===arr.length?"success":"error");
-      close();refreshPeople();loadPlan();if(selMode)setSel(false);if(tab==="sent")load();
+      close();refreshPeople();if(selMode)setSel(false);if(tab==="sent")load();
     }catch(e){console.error(e);note(sn,"Something went wrong.")}
     finally{go.disabled=false;go.textContent="Share"}
   };
@@ -724,7 +720,7 @@ function startRealtime(){
 function stopRealtime(){if(rtCh){sb.removeChannel(rtCh);rtCh=null}}
 
 /* ---------- push notifications ---------- */
-const VAPID_PUBLIC="PASTE_YOUR_VAPID_PUBLIC_KEY";
+const VAPID_PUBLIC="BCYFftUFZYT6IfGmubTwHCME6ntIsPXX-m8ptDBP3nJJkCF5nx7mMyBgqU5GEg4i2lPX7ees8l52Gp-P9_qH7do";
 let pushState=false;
 const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
 const b64u=k=>{const b=atob((k+"=".repeat((4-k.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))};
@@ -757,114 +753,6 @@ async function pushOff(silent){
   pushState=false;if(!silent)toast("Notifications off");
 }
 if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open-tab"&&TITLES[e.data.tab])gotoTab(e.data.tab)});
-
-/* ---------- plans (Free / Premium) + automatic Lipila payment ---------- */
-/* Price, currency, period, limits and perks come from the app_settings table. */
-let planInfo=null;
-let cfg={price:"50",currency_symbol:"K",period_days:"30",free_daily_shares:"10",perks:"Unlimited shares per day"};
-async function loadConfig(){
-  try{const{data,error}=await sb.from("app_settings").select("key,value");if(!error&&data)data.forEach(r=>{cfg[r.key]=r.value})}catch(e){console.warn(e)}
-}
-async function loadPlan(){
-  if(!user)return;
-  try{const{data,error}=await sb.rpc("get_my_plan");if(!error&&data)planInfo=data}catch(e){console.warn(e)}
-  updatePlanBar();
-}
-const daysLeft=()=>{if(!planInfo||planInfo.plan!=="premium")return 0;if(!planInfo.premium_until)return Infinity;return Math.max(0,Math.ceil((new Date(planInfo.premium_until)-Date.now())/864e5))};
-const daysTxt=()=>{const d=daysLeft();return d===Infinity?"No expiry":d===1?"1 day left":d+" days left"};
-const planLabel=()=>!planInfo||planInfo.plan!=="premium"?"Free":"Premium · "+daysTxt();
-const priceLabel=()=>`${cfg.currency_symbol}${cfg.price} / ${cfg.period_days==="30"?"month":cfg.period_days+" days"}`;
-function updatePlanBar(){
-  const b=$("planBar");if(!b)return;
-  if(!planInfo||planInfo.plan!=="premium"){b.classList.add("hidden");return}
-  const d=daysLeft(),warn=d!==Infinity&&d<=3;
-  b.className="planbar"+(warn?" warn":"");
-  b.innerHTML=`<b>Premium</b><span>${esc(daysTxt())}</span>${warn?'<i class="pill">Renew</i>':""}`;
-}
-$("planBar").onclick=()=>planSheet();
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user)loadPlan()});
-function shareHint(){
-  if(!planInfo||planInfo.plan==="premium")return"";
-  const left=Math.max(0,(planInfo.shares_limit||10)-(planInfo.shares_used||0));
-  return` · ${left} share${left===1?"":"s"} left today`;
-}
-async function fnCall(name,body){
-  try{
-    const{data:sd}=await sb.auth.getSession();
-    const t=sd&&sd.session&&sd.session.access_token;
-    if(!t)return{ok:false,message:"Please sign in again."};
-    const r=await fetch("/api/"+name,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify(body)});
-    let j={};try{j=await r.json()}catch{}
-    if(!r.ok||!j.success)return{ok:false,message:j.message||"Payment request failed."};
-    return{ok:true,...j};
-  }catch(e){console.error(e);return{ok:false,message:"Couldn't reach the payment service."}}
-}
-async function pollPayment(ref,cancelled){
-  for(let i=0;i<45;i++){
-    await new Promise(r=>setTimeout(r,i?4000:2500));
-    if(cancelled())return"cancelled";
-    const r=await fnCall("check-payment",{referenceId:ref});
-    if(r.ok&&(r.status==="successful"||r.status==="failed"))return r.status;
-  }
-  return"timeout";
-}
-async function resumePayments(){
-  if(!user)return;
-  try{
-    const since=new Date(Date.now()-864e5).toISOString();
-    const{data}=await sb.from("payments").select("reference").eq("status","pending").gte("created_at",since).limit(3);
-    let hit=false;
-    for(const p of data||[]){const r=await fnCall("check-payment",{referenceId:p.reference});if(r.ok&&r.status==="successful")hit=true}
-    if(hit){await loadPlan();toast("Payment confirmed. Premium is active!","success")}
-  }catch(e){console.warn(e)}
-}
-function paySheet(){
-  const ov=document.createElement("div");ov.className="ov";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
-  const perks=(cfg.perks||"").split("|").map(x=>x.trim()).filter(Boolean);
-  let saved="";try{saved=localStorage.getItem("pd_phone")||""}catch{}
-  const amt=esc(cfg.currency_symbol+cfg.price);
-  ov.innerHTML=`<div class="sheet full" style="max-height:90dvh;overflow-y:auto"><h3>Go Premium</h3><p style="white-space:normal;font-size:24px;font-weight:700;color:var(--label);margin:8px 0 4px">${esc(priceLabel())}</p><div style="margin:8px 4px 12px;font-size:15px">${perks.map(x=>`<div style="padding:3px 0">✓ ${esc(x)}</div>`).join("")}</div><p style="white-space:normal;text-align:left;margin:0 4px 14px">Enter your MTN, Airtel or Zamtel Money number. You'll get a prompt on your phone to approve the payment.</p><div class="group"><input id="payPhone" type="tel" inputmode="tel" placeholder="Mobile money number (0977…)" value="${esc(saved)}" autocomplete="tel"></div><div class="note" id="payNote"></div><button class="btn" id="payGo">Pay ${amt}</button><button class="cancel-l" id="payNo">Cancel</button></div>`;
-  let stop=false;
-  const close=()=>{stop=true;ov.remove()},n=ov.querySelector("#payNote"),go=ov.querySelector("#payGo"),ph=ov.querySelector("#payPhone");
-  ov.onclick=e=>{if(e.target===ov)close()};ov.querySelector("#payNo").onclick=close;
-  $("phone").appendChild(ov);
-  const reset=()=>{go.disabled=false;ph.disabled=false;go.textContent="Pay "+cfg.currency_symbol+cfg.price};
-  go.onclick=async()=>{
-    const phone=ph.value.trim();
-    if(phone.replace(/\D/g,"").length<9)return note(n,"Enter your mobile money number.");
-    try{localStorage.setItem("pd_phone",phone)}catch{}
-    go.disabled=true;ph.disabled=true;go.textContent="Sending request…";n.className="note";
-    const c=await fnCall("create-payment",{phone});
-    if(!c.ok){reset();return note(n,c.message)}
-    go.textContent="Waiting for approval…";
-    note(n,"Approve the prompt on your phone and enter your PIN. This screen updates by itself.","success");
-    const r=await pollPayment(c.referenceId,()=>stop);
-    if(stop)return;
-    if(r==="successful"){close();await loadPlan();toast("Premium unlocked · "+daysTxt(),"success")}
-    else if(r==="failed"){reset();note(n,"The payment wasn't completed. Please try again.")}
-    else{reset();note(n,"Still waiting. If you approved it, Premium unlocks automatically within a few minutes.","success")}
-  };
-}
-async function planSheet(){
-  busy(true);await Promise.all([loadPlan(),loadConfig()]);busy(false);
-  if(!planInfo)return toast("Run setup-plans.sql first.","error");
-  if(planInfo.plan==="premium"){
-    const u=planInfo.premium_until?` · until ${when(planInfo.premium_until)}`:"";
-    return sheet("Premium",`${daysTxt()}${u}`,[{l:`Renew · ${priceLabel()}`,f:paySheet}]);
-  }
-  const used=planInfo.shares_used||0,lim=planInfo.shares_limit||10;
-  const rs=planInfo.resets_at&&used>=lim?` · frees up ${new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(planInfo.resets_at))}`:"";
-  sheet("Free Plan",`${used} of ${lim} shares used in the last 24 hours${rs}`,[{l:`Go Premium · ${priceLabel()}`,f:paySheet}]);
-}
-
-/* ---------- reload ---------- */
-async function reloadApp(){
-  busy(true);
-  try{
-    if("serviceWorker" in navigator){const r=await navigator.serviceWorker.getRegistration();if(r)await r.update()}
-  }catch(e){console.warn(e)}
-  location.reload();
-}
 
 /* ---------- sort & keyboard ---------- */
 $("sortBtn").onclick=()=>sheet("Sort By","",Object.keys(SORTS).map(k=>({l:(k===sortKey?"✓ ":"")+SORTS[k],f:()=>{sortKey=k;try{localStorage.setItem("pd_sort",k)}catch{}load()}})));
