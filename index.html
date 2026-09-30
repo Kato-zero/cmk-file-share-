@@ -720,7 +720,7 @@ function startRealtime(){
 function stopRealtime(){if(rtCh){sb.removeChannel(rtCh);rtCh=null}}
 
 /* ---------- push notifications ---------- */
-const VAPID_PUBLIC="PASTE_YOUR_VAPID_PUBLIC_KEY";
+const VAPID_PUBLIC="BCYFftUFZYT6IfGmubTwHCME6ntIsPXX-m8ptDBP3nJJkCF5nx7mMyBgqU5GEg4i2lPX7ees8l52Gp-P9_qH7do";
 let pushState=false;
 const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
 const b64u=k=>{const b=atob((k+"=".repeat((4-k.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))};
