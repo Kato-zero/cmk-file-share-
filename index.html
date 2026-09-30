@@ -281,7 +281,7 @@ $("authForm").addEventListener("submit",async e=>{
   if(signup){$("authForm").reset();note(n,r.data&&r.data.session?"Account created.":"Account created. Check your email to confirm it.","success")}
   else $("authForm").reset();
 });
-$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Blocked Senders",f:blockedSheet},{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
+$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Notifications: "+(pushState?"On":"Off"),f:pushToggle},{l:"Blocked Senders",f:blockedSheet},{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);if(pushState)await pushOff(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
 $("forgot").onclick=async()=>{
   const email=$("email").value.trim(),n=$("aNote");
   if(!email)return note(n,"Enter your email above first.");
@@ -310,8 +310,8 @@ function renameSheet(it){inputSheet({title:"Rename",sub:"Only the display name c
   await sb.from("file_shares").update({file_name:name}).eq("storage_path",it.path).eq("owner_id",user.id);
   it.name=name;render();toast("Renamed","success");
 }})}
-function showAuth(){$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
-async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;refreshPeople();refreshBadge();await sweep();await load()}
+function showAuth(){stopRealtime();$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
+async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;refreshPeople();refreshBadge();startRealtime();syncPush();await sweep();await load();const qt=new URLSearchParams(location.search).get("tab");if(qt&&TITLES[qt]){try{history.replaceState(null,"",location.pathname)}catch{}gotoTab(qt)}}
 const HASH=location.hash+location.search;
 let pendingRecovery=/type=recovery/.test(HASH);
 function afterSession(){
@@ -690,6 +690,7 @@ async function refreshBadge(){
   const{count,error}=await sb.from("file_shares").select("id",{count:"exact",head:true}).eq("recipient_id",user.id).eq("status","pending");
   if(error)return;
   const n=count||0;$("badge").textContent=n>99?"99+":n;$("badge").classList.toggle("hidden",!n);
+  try{if(navigator.setAppBadge)n?navigator.setAppBadge(n):navigator.clearAppBadge()}catch{}
 }
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user)refreshBadge()});
 setInterval(()=>{if(user&&!document.hidden)refreshBadge()},60000);
@@ -700,6 +701,58 @@ async function blockedSheet(){
   if(!rows.length)return sheet("Blocked Senders","No one is blocked.",[{l:"OK",f:()=>{}}]);
   sheet("Blocked Senders","Tap a person to unblock them.",rows.slice(0,8).map(r=>({l:r.email,f:async()=>{const x=await sb.rpc("unblock_sender",{p_blocked_id:String(r.blocked_id)});x.error?toast(x.error.message,"error"):toast("Unblocked","success")}})));
 }
+
+/* ---------- realtime ---------- */
+let rtCh=null,rtT;
+function startRealtime(){
+  stopRealtime();
+  const bump=()=>{refreshBadge();clearTimeout(rtT);rtT=setTimeout(()=>{if((tab==="shared"||tab==="sent")&&!selMode)load()},400)};
+  rtCh=sb.channel("shares-"+user.id)
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"file_shares",filter:`recipient_id=eq.${user.id}`},p=>{if(p.new&&p.new.status==="pending")toast("New file request","success");bump()})
+    .on("postgres_changes",{event:"UPDATE",schema:"public",table:"file_shares",filter:`recipient_id=eq.${user.id}`},()=>bump())
+    .on("postgres_changes",{event:"UPDATE",schema:"public",table:"file_shares",filter:`owner_id=eq.${user.id}`},p=>{
+      const a=p.old&&p.old.status,b=p.new&&p.new.status;
+      if(a&&b&&a!==b){if(b==="approved")toast("A file you sent was accepted","success");else if(b==="declined")toast("A file you sent was declined","error")}
+      bump();
+    })
+    .subscribe();
+}
+function stopRealtime(){if(rtCh){sb.removeChannel(rtCh);rtCh=null}}
+
+/* ---------- push notifications ---------- */
+const VAPID_PUBLIC="PASTE_YOUR_VAPID_PUBLIC_KEY";
+let pushState=false;
+const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+const b64u=k=>{const b=atob((k+"=".repeat((4-k.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))};
+function savePush(sub){const j=sub.toJSON();return sb.from("push_subscriptions").upsert({user_id:user.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:"user_id,endpoint"})}
+async function syncPush(){
+  if(!pushOK()||Notification.permission!=="granted"){pushState=false;return}
+  try{const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();pushState=!!sub;if(sub)await savePush(sub)}catch(e){console.warn(e)}
+}
+async function pushToggle(){
+  if(pushState)return pushOff();
+  const needInstall=isIOS()&&!standalone();
+  if(!pushOK()||needInstall)return sheet("Notifications",needInstall?"On iPhone, add the app to your home screen first, then turn notifications on from inside it.":"This browser doesn't support push notifications.",[{l:"OK",f:()=>{}}]);
+  if(VAPID_PUBLIC.startsWith("PASTE"))return toast("Push isn't set up yet: add your VAPID public key.","error");
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted")return toast("Notifications are blocked. Allow them in your browser or phone settings.","error");
+  try{
+    busy(true);
+    const reg=await navigator.serviceWorker.ready;
+    const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUBLIC)});
+    const r=await savePush(sub);busy(false);
+    if(r.error)return toast(/push_subscriptions/.test(r.error.message)?"Run setup-notifications.sql first.":r.error.message,"error");
+    pushState=true;toast("Notifications on","success");
+  }catch(e){busy(false);console.error(e);toast("Couldn't turn on notifications.","error")}
+}
+async function pushOff(silent){
+  try{
+    const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
+    if(sub){await sb.from("push_subscriptions").delete().eq("user_id",user.id).eq("endpoint",sub.endpoint);if(!silent)await sub.unsubscribe()}
+  }catch(e){console.error(e)}
+  pushState=false;if(!silent)toast("Notifications off");
+}
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open-tab"&&TITLES[e.data.tab])gotoTab(e.data.tab)});
 
 /* ---------- sort & keyboard ---------- */
 $("sortBtn").onclick=()=>sheet("Sort By","",Object.keys(SORTS).map(k=>({l:(k===sortKey?"✓ ":"")+SORTS[k],f:()=>{sortKey=k;try{localStorage.setItem("pd_sort",k)}catch{}load()}})));
