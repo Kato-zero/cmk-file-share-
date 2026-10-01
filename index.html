@@ -17,6 +17,33 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js" integrity="sha384-UlHjK3F7TCQCEUpnoa1ohMbP2oaWB3Aypv4gMo511vaZ86uUZ0Zv7UzZ0J1zRUT1" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<!-- ==================== ONESIGNAL SDK ==================== -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "a3afc4ab-9ded-459d-9408-ff9005fd28e0",
+    });
+  });
+</script>
+<script>
+  /* Replace YOUR_ONESIGNAL_APP_ID with the real ID from your OneSignal dashboard. */
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "a3afc4ab-9ded-459d-9408-ff9005fd28e0",
+      serviceWorkerPath: "OneSignalSDKWorker.js",
+      serviceWorkerParam: { scope: "/" },
+      allowLocalhostAsSecureOrigin: true, /* helpful for local testing */
+      notifyButton: { enable: false }      /* we drive the prompt ourselves */
+    });
+  });
+</script>
+<!-- ======================================================== -->
+
 <style>
 :root{--blue:#007aff;--red:#ff3b30;--green:#34c759;--bg:#f2f2f7;--card:#fff;--label:#000;--label2:rgba(60,60,67,.6);--sep:rgba(60,60,67,.18);--fill:rgba(120,120,128,.12);--blur:rgba(249,249,249,.82);--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root{--blue:#0a84ff;--red:#ff453a;--green:#30d158;--bg:#000;--card:#1c1c1e;--label:#fff;--label2:rgba(235,235,245,.6);--sep:rgba(84,84,88,.5);--fill:rgba(118,118,128,.24);--blur:rgba(22,22,24,.82)}}
@@ -289,6 +316,44 @@ const BUCKET="my-files";
 const $=id=>document.getElementById(id);
 let user=null,tab="my",items=[],signup=false;
 
+/* ---------- OneSignal helpers ---------- */
+/* Called after a successful sign-in to link the OneSignal subscription to the Supabase user ID. */
+async function osLogin(userId){
+  try{
+    await OneSignalDeferred.push(async function(OneSignal){
+      await OneSignal.login(userId);
+      /* Optionally request permission immediately after login if not yet granted. */
+      if(!OneSignal.Notifications.permission){
+        try{await OneSignal.Notifications.requestPermission()}catch{}
+      }
+    });
+  }catch(e){console.warn("OneSignal login failed:",e)}
+}
+/* Called on sign-out to unlink the subscription. */
+async function osLogout(){
+  try{
+    await OneSignalDeferred.push(async function(OneSignal){
+      await OneSignal.logout();
+    });
+  }catch(e){console.warn("OneSignal logout failed:",e)}
+}
+/* Toggle the OS-level push permission. */
+async function osTogglePush(){
+  return new Promise(resolve=>{
+    OneSignalDeferred.push(async function(OneSignal){
+      try{
+        if(OneSignal.Notifications.permission){
+          /* Can't programmatically revoke browser permission; guide user to settings. */
+          resolve("blocked");
+        }else{
+          const ok=await OneSignal.Notifications.requestPermission();
+          resolve(ok?"granted":"denied");
+        }
+      }catch(e){console.warn(e);resolve("error")}
+    });
+  });
+}
+
 /* ---------- back-button navigation ---------- */
 const backStack=[];
 function pushBack(fn){ backStack.push(fn); }
@@ -366,7 +431,24 @@ $("authForm").addEventListener("submit",async e=>{
   if(signup){$("authForm").reset();note(n,r.data&&r.data.session?"Account created.":"Account created. Check your email to confirm it.","success")}
   else $("authForm").reset();
 });
-$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[...(canInstall()?[{l:"Install App",f:installApp}]:[]),{l:"Notifications: "+(pushState?"On":"Off"),f:pushToggle},{l:"Blocked Senders",f:blockedSheet},{l:"Auto-Delete: "+DL[defExp],f:defSheet},{l:"Sign Out",d:1,f:async()=>{busy(true);if(pushState)await pushOff(true);await sb.auth.signOut();busy(false);user=null;showAuth()}}]);
+$("settings").onclick=()=>sheet("Settings","Auto-delete applies to new uploads.",[
+  ...(canInstall()?[{l:"Install App",f:installApp}]:[]),
+  {l:"Enable Notifications",f:async()=>{
+    const r=await osTogglePush();
+    if(r==="granted")toast("Notifications enabled","success");
+    else if(r==="denied")toast("Notifications blocked. Enable them in your browser settings.","error");
+    else if(r==="blocked")toast("Notifications already enabled in browser settings.");
+    else toast("Couldn't enable notifications.","error");
+  }},
+  {l:"Blocked Senders",f:blockedSheet},
+  {l:"Auto-Delete: "+DL[defExp],f:defSheet},
+  {l:"Sign Out",d:1,f:async()=>{
+    busy(true);
+    await osLogout();
+    await sb.auth.signOut();
+    busy(false);user=null;showAuth();
+  }}
+]);
 $("forgot").onclick=async()=>{
   const email=$("email").value.trim(),n=$("aNote");
   if(!email)return note(n,"Enter your email above first.");
@@ -407,11 +489,24 @@ function renameSheet(it){inputSheet({title:"Rename",sub:isLink(it.path)?"Change 
   it.name=name;render();toast("Renamed","success");
 }})}
 function showAuth(){stopRealtime();backStack.length=0;$("auth").classList.remove("hidden");$("app").classList.add("hidden")}
-async function showApp(u){user=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("who").textContent=u.email||"";const dm=u.user_metadata&&u.user_metadata.pd_exp;if(K.includes(dm))defExp=dm;
+async function showApp(u){
+  user=u;
+  $("auth").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("who").textContent=u.email||"";
+  const dm=u.user_metadata&&u.user_metadata.pd_exp;
+  if(K.includes(dm))defExp=dm;
   backStack.length=0;
   history.pushState({pd:"root"},"");
-  refreshPeople();refreshBadge();startRealtime();syncPush();await sweep();await load();
-  const qt=new URLSearchParams(location.search).get("tab");if(qt&&TITLES[qt]){try{history.replaceState(null,"",location.pathname)}catch{}gotoTab(qt)}
+  refreshPeople();
+  refreshBadge();
+  startRealtime();
+  /* Link OneSignal to this user. */
+  osLogin(u.id);
+  await sweep();
+  await load();
+  const qt=new URLSearchParams(location.search).get("tab");
+  if(qt&&TITLES[qt]){try{history.replaceState(null,"",location.pathname)}catch{}gotoTab(qt)}
 }
 const HASH=location.hash+location.search;
 let pendingRecovery=/type=recovery/.test(HASH);
@@ -1129,79 +1224,6 @@ function startRealtime(){
 }
 function stopRealtime(){if(rtCh){sb.removeChannel(rtCh);rtCh=null}}
 
-/* ---------- push notifications ---------- */
-const VAPID_PUBLIC="BCYFftUFZYT6IfGmubTwHCME6ntIsPXX-m8ptDBP3nJJkCF5nx7mMyBgqU5GEg4i2lPX7ees8l52Gp-P9_qH7do";
-let pushState=false;
-const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
-const b64u=k=>{const b=atob((k+"=".repeat((4-k.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))};
-function savePush(sub){const j=sub.toJSON();return sb.from("push_subscriptions").upsert({user_id:user.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:"user_id,endpoint"})}
-async function syncPush(){
-  if(!pushOK()||Notification.permission!=="granted"){pushState=false;return}
-  try{const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();pushState=!!sub;if(sub)await savePush(sub)}catch(e){console.warn(e)}
-}
-async function pushToggle(){
-  if(pushState)return pushOff();
-  const needInstall=isIOS()&&!standalone();
-  if(!pushOK()||needInstall)return sheet("Notifications",needInstall?"On iPhone, add the app to your home screen first, then turn notifications on from inside it.":"This browser doesn't support push notifications.",[{l:"OK",f:()=>{}}]);
-  if(VAPID_PUBLIC.startsWith("PASTE"))return toast("Push isn't set up yet: add your VAPID public key.","error");
-  const perm=await Notification.requestPermission();
-  if(perm!=="granted")return toast("Notifications are blocked. Allow them in your browser or phone settings.","error");
-  try{
-    busy(true);
-    const reg=await navigator.serviceWorker.ready;
-    const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUBLIC)});
-    const r=await savePush(sub);busy(false);
-    if(r.error)return toast(/push_subscriptions/.test(r.error.message)?"Run setup-notifications.sql first.":r.error.message,"error");
-    pushState=true;toast("Notifications on","success");
-  }catch(e){busy(false);console.error(e);toast("Couldn't turn on notifications.","error")}
-}
-async function pushOff(silent){
-  try{
-    const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
-    if(sub){await sb.from("push_subscriptions").delete().eq("user_id",user.id).eq("endpoint",sub.endpoint);if(!silent)await sub.unsubscribe()}
-  }catch(e){console.error(e)}
-  pushState=false;if(!silent)toast("Notifications off");
-}
-if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open-tab"&&TITLES[e.data.tab])gotoTab(e.data.tab)});
-
-/* ---------- sort & keyboard ---------- */
-$("sortBtn").onclick=()=>sheet("Sort By","",Object.keys(SORTS).map(k=>({l:(k===sortKey?"✓ ":"")+SORTS[k],f:()=>{sortKey=k;try{localStorage.setItem("pd_sort",k)}catch{}load()}})));
-$("list").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("row")){e.preventDefault();e.target.click()}});
-
-/* ---------- auto-delete ---------- */
-const K=["hour","day","week","month","never"],
-  DL={hour:"After 1 hour",day:"After 1 day",week:"After 1 week",month:"After 1 month",never:"Never"},
-  DUR={hour:36e5,day:864e5,week:6048e5,month:2592e6};
-let defExp="hour";try{defExp=localStorage.getItem("pd_exp")||"hour"}catch{}
-if(!K.includes(defExp))defExp="hour";
-const expAt=k=>k==="never"?null:new Date(Date.now()+DUR[k]).toISOString();
-function left(iso){
-  const ms=new Date(iso)-Date.now();if(ms<=0)return"Deleting soon";
-  const d=Math.floor(ms/864e5),h=Math.floor(ms/36e5),m=Math.floor(ms/6e4);
-  if(d>=1)return`Deletes in ${d} day${d===1?"":"s"}`;
-  if(h>=1)return`Deletes in ${h} hr ${m%60} min`;
-  return`Deletes in ${m} min`;
-}
-function defSheet(){sheet("Auto-Delete New Uploads","Files and links are removed automatically after this time.",K.map(k=>({l:(k===defExp?"✓ ":"")+DL[k],f:()=>{defExp=k;try{localStorage.setItem("pd_exp",k)}catch{}sb.auth.updateUser({data:{pd_exp:k}});toast("Auto-Delete: "+DL[k])}})))}
-function expSheet(it){sheet("Auto-Delete",it.name,K.map(k=>({l:DL[k],f:()=>setExp(it,k)})))}
-async function setExp(it,k){
-  const v=expAt(k);busy(true);
-  const{data,error}=await sb.from("files").update({expires_at:v}).eq("id",it.id).eq("owner_id",user.id).select("id");
-  busy(false);
-  if(error){console.error(error);return toast(/expires_at/.test(error.message)?"Add the expires_at column in Supabase first.":error.message,"error")}
-  if(!data||!data.length)return toast("Couldn't update. Check the update policy on files.","error");
-  it.exp=v;render();toast(k==="never"?"Auto-delete turned off":"Auto-Delete: "+DL[k],"success");
-}
-async function sweep(){
-  if(!user)return 0;
-  const{data,error}=await sb.from("files").select("id,storage_path").eq("owner_id",user.id).lt("expires_at",new Date().toISOString());
-  if(error||!data||!data.length)return 0;
-  let n=0;for(const f of data){const r=await purge(f.id,f.storage_path);if(!(r&&r.error))n++}
-  if(n)toast(`${n} expired item${n===1?"":"s"} removed`);
-  return n;
-}
-document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&user){const n=await sweep();if(n&&tab==="my")load()}});
-
 /* ---------- PWA ---------- */
 let dip=null;
 const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
@@ -1228,11 +1250,6 @@ window.addEventListener("appinstalled",()=>{dip=null;refreshInstall();toast("Pri
 window.addEventListener("offline",()=>toast("You're offline","error"));
 window.addEventListener("online",()=>toast("Back online","success"));
 refreshInstall();
-if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){
-  const had=!!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(had)sheet("Update Available","A new version of PrivateDrive is ready.",[{l:"Reload Now",f:()=>location.reload()}])});
-  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(console.error));
-}
 
 /* ---------- multi-select ---------- */
 let selMode=false;const selSet=new Set();
