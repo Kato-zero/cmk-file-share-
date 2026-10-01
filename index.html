@@ -75,7 +75,7 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
 .ico{flex:0 0 40px;height:40px;border-radius:9px;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.2px}
 .r-info{flex:1;min-width:0}
 .r-name{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r-meta{font-size:13px;color:var(--label2);margin-top:2px}
+.r-meta{font-size:13px;color:var(--label2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chev{width:8px;height:14px;stroke:var(--label2);opacity:.6;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 8px}
 .empty{text-align:center;padding:70px 30px;color:var(--label2)}
 .empty svg{width:64px;height:64px;fill:none;stroke:var(--label2);stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;opacity:.6;margin-bottom:10px}
@@ -140,7 +140,7 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
 .aud{display:flex;flex-direction:column;align-items:center;gap:18px;padding:30px;text-align:center;width:100%}.aud audio{width:100%}
 .big{width:110px;height:110px;font-size:24px;border-radius:24px;flex:none}
 .nop{text-align:center;padding:30px}.nop .btn{max-width:220px;margin:18px auto 0}
-.nav-r{display:flex;gap:18px;align-items:center;z-index:1}
+.nav-r{display:flex;gap:14px;align-items:center;z-index:1}
 .chk{display:none;flex:0 0 22px;height:22px;border-radius:50%;border:1.5px solid var(--label2);align-items:center;justify-content:center;color:#fff;transition:.12s}
 .selmode .chk{display:flex}.selmode .more{display:none}
 .selmode .row+.row::before{left:100px}
@@ -219,7 +219,11 @@ button,input{font:inherit;color:inherit}button{cursor:pointer;border:0;backgroun
       <button class="nav-btn hidden" id="allBtn">Select All</button>
     </div>
     <div class="nav-title" id="navTitle">My Files</div>
-    <div class="nav-r"><button class="nav-btn" id="selBtn">Select</button><button class="nav-btn" id="addBtn" aria-label="Upload"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <div class="nav-r">
+      <button class="nav-btn" id="selBtn">Select</button>
+      <button class="nav-btn" id="linkAddBtn" aria-label="Send a link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+      <button class="nav-btn" id="addBtn" aria-label="Upload"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
   </div></div>
   <div id="scroll">
     <h1 class="large" id="title">My Files</h1>
@@ -267,8 +271,11 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 const bytes=b=>{if(b===0)return"Zero KB";if(!b)return"Unknown size";const u=["bytes","KB","MB","GB","TB"],i=Math.min(4,Math.floor(Math.log(b)/Math.log(1024)));return(b/Math.pow(1024,i)).toFixed(i<2?0:1)+" "+u[i]};
 const when=d=>{try{return new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",year:"numeric"}).format(new Date(d))}catch{return""}};
 const safeName=n=>n.replace(/[<>:"/\\|?*\x00-\x1F]/g,"_").replace(/\s+/g," ").trim().slice(0,240)||"file";
+const isLink=p=>/^https?:\/\//i.test(String(p||""));
 const TYPES=[["IMG","#ff9500",["jpg","jpeg","png","gif","webp","bmp","svg","heic"]],["PDF","#ff3b30",["pdf"]],["DOC","#007aff",["doc","docx","txt","rtf"]],["XLS","#34c759",["xls","xlsx","csv"]],["VID","#af52de",["mp4","mov","avi","mkv","webm"]],["AUD","#ff2d55",["mp3","wav","aac","m4a"]],["ZIP","#8e8e93",["zip","rar","7z"]]];
 const kind=n=>{const e=(n.split(".").pop()||"").toLowerCase();return TYPES.find(t=>t[2].includes(e))||["FILE","#636366"]};
+const itemKind=it=>isLink(it&&it.path)?["LNK","#007aff"]:kind((it&&it.name)||"");
+const hostOf=u=>{try{return new URL(u).hostname.replace(/^www\./,"")}catch{return u}};
 function toast(m,t=""){const d=document.createElement("div");d.className="toast "+t;d.textContent=m;$("toasts").appendChild(d);setTimeout(()=>d.remove(),3200)}
 const busy=v=>$("loading").classList.toggle("hidden",!v);
 function note(el,m,t="error"){el.textContent=m;el.className="note show "+t}
@@ -313,7 +320,7 @@ function inputSheet(o){
   go.onclick=run;[f,f2].forEach(x=>{if(x)x.onkeydown=e=>{if(e.key==="Enter")run()}});
 }
 function newPwSheet(){inputSheet({title:"New Password",sub:"Choose a new password for your account.",type:"password",ph:"New password",ac:"new-password",btn:"Update Password",onGo:async v=>{if(v.length<6)return"Password must be at least 6 characters.";const{error}=await sb.auth.updateUser({password:v});if(error)return error.message;toast("Password updated","success")}})}
-function renameSheet(it){inputSheet({title:"Rename",sub:"Only the display name changes.",val:it.name,btn:"Rename",onGo:async v=>{
+function renameSheet(it){inputSheet({title:"Rename",sub:isLink(it.path)?"Change the link title.":"Only the display name changes.",val:it.name,btn:"Rename",onGo:async v=>{
   if(!v)return"Enter a name.";const name=safeName(v);
   const{data,error}=await sb.from("files").update({original_name:name}).eq("id",it.id).eq("owner_id",user.id).select("id");
   if(error)return error.message;
@@ -332,7 +339,6 @@ function afterSession(){
   newPwSheet();
 }
 (async()=>{
-  /* Register the listener first so the recovery event can't be missed. */
   sb.auth.onAuthStateChange(async(ev,s)=>{
     if(ev==="PASSWORD_RECOVERY")pendingRecovery=true;
     if(s&&s.user){if(!user||user.id!==s.user.id)await showApp(s.user);afterSession()}
@@ -359,7 +365,7 @@ function sheet(title,sub,acts){
 function shareSheet(it){
   const arr=Array.isArray(it)?it:[it];
   const ov=document.createElement("div");ov.className="ov";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
-  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Files":"File"}</h3><p>${esc(arr.length>1?arr.length+" files":arr[0].name)}</p>${pickHtml()}<div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
+  ov.innerHTML=`<div class="sheet full"><h3>Share ${arr.length>1?"Items":"Item"}</h3><p>${esc(arr.length>1?arr.length+" items":arr[0].name)}</p>${pickHtml()}<div class="group"><input id="rcpt" type="email" placeholder="Recipient email" autocapitalize="none"></div><div class="note" id="sNote"></div><button class="btn" id="sGo">Share</button><button class="cancel-l" id="sNo">Cancel</button></div>`;
   const close=()=>ov.remove();
   ov.onclick=e=>{if(e.target===ov)close()};
   $("phone").appendChild(ov);
@@ -375,14 +381,88 @@ function shareSheet(it){
       let ok=0,msg="";
       for(const f of arr){
         const{data,error}=await sb.rpc("share_file",{p_file_id:f.id,p_recipient_email:email});
-        if(error)msg=error.message;else if(!data||!data.success)msg=(data&&data.message)||"The file could not be shared.";else ok++;
+        if(error)msg=error.message;else if(!data||!data.success)msg=(data&&data.message)||"The item could not be shared.";else ok++;
       }
       if(!ok)return note(sn,msg);
-      toast(ok===arr.length?(arr.length>1?`Shared ${ok} files`:`Shared "${arr[0].name}"`):`Shared ${ok} of ${arr.length}: ${msg}`,ok===arr.length?"success":"error");
+      toast(ok===arr.length?(arr.length>1?`Shared ${ok} items`:`Shared "${arr[0].name}"`):`Shared ${ok} of ${arr.length}: ${msg}`,ok===arr.length?"success":"error");
       close();refreshPeople();if(selMode)setSel(false);if(tab==="sent")load();
     }catch(e){console.error(e);note(sn,"Something went wrong.")}
     finally{go.disabled=false;go.textContent="Share"}
   };
+}
+
+/* ---------- compose & share a web link ---------- */
+function shareLinkSheet(){
+  const ov=document.createElement("div");ov.className="ov";ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");
+  ov.innerHTML=`<div class="sheet full">
+    <h3>Send a Link</h3>
+    <p>Paste a link and share it with someone.</p>
+    ${pickHtml()}
+    <div class="group">
+      <input id="slUrl" type="url" placeholder="https://…" autocapitalize="none" autocomplete="off" inputmode="url">
+      <input id="slTitle" type="text" placeholder="Title (optional)">
+      <input id="slTo" type="email" placeholder="Recipient email" autocapitalize="none" autocomplete="off">
+    </div>
+    <div class="note" id="slNote"></div>
+    <button class="btn" id="slGo">Send Link</button>
+    <button class="cancel-l" id="slNo">Cancel</button>
+  </div>`;
+  const close=()=>ov.remove();
+  ov.onclick=e=>{if(e.target===ov)close()};
+  $("phone").appendChild(ov);
+  ov.querySelector("#slNo").onclick=close;
+
+  const urlI=ov.querySelector("#slUrl"),titleI=ov.querySelector("#slTitle"),toI=ov.querySelector("#slTo"),
+        noteEl=ov.querySelector("#slNote"),goBtn=ov.querySelector("#slGo");
+
+  ov.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{
+    toI.value=c.dataset.e;
+    ov.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===c));
+  });
+  setTimeout(()=>urlI.focus(),300);
+
+  const send=async()=>{
+    const rawUrl=urlI.value.trim();
+    let title=titleI.value.trim();
+    const email=toI.value.trim().toLowerCase();
+    if(!rawUrl)return note(noteEl,"Paste a link.");
+    let url=rawUrl;
+    if(!/^https?:\/\//i.test(url))url="https://"+url;
+    try{new URL(url)}catch{return note(noteEl,"That doesn't look like a valid link.")}
+    if(!email)return note(noteEl,"Enter the recipient's email address.");
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return note(noteEl,"Enter a valid email address.");
+    if(email===(user.email||"").toLowerCase())return note(noteEl,"That's your own email.");
+    if(!title)title=hostOf(url);
+
+    goBtn.disabled=true;goBtn.textContent="Sending…";
+    let createdId=null;
+    try{
+      const row={owner_id:user.id,original_name:title,storage_path:url,mime_type:"text/uri-list",file_size:0};
+      const ex=expAt(defExp);
+      const ins=await sb.from("files").insert(ex?{...row,expires_at:ex}:row).select("id").single();
+      if(ins.error||!ins.data)throw new Error(ins.error?ins.error.message:"Couldn't save link.");
+      createdId=ins.data.id;
+
+      const rpc=await sb.rpc("share_file",{p_file_id:createdId,p_recipient_email:email});
+      if(rpc.error){await sb.from("files").delete().eq("id",createdId);throw new Error(rpc.error.message)}
+      if(!rpc.data||!rpc.data.success){
+        await sb.from("files").delete().eq("id",createdId);
+        throw new Error((rpc.data&&rpc.data.message)||"The link could not be shared.");
+      }
+
+      toast(`Link sent to ${email}`,"success");
+      close();
+      refreshPeople();
+      if(tab==="my")load();else if(tab==="sent")load();else if(tab==="people")renderPeople();
+    }catch(e){
+      console.error(e);
+      note(noteEl,e.message||"Something went wrong.");
+    }finally{
+      goBtn.disabled=false;goBtn.textContent="Send Link";
+    }
+  };
+  goBtn.onclick=send;
+  [urlI,titleI,toI].forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();send()}}));
 }
 
 /* ---------- tabs & lists ---------- */
@@ -419,6 +499,7 @@ async function load(more=false){
   $("selBtn").classList.toggle("hidden",pp);updateSel();
   $("sortBtn").textContent="Sort: "+SORTS[sortKey];$("sortBtn").classList.toggle("hidden",pp);
   $("folders").classList.toggle("hidden",pp);
+  $("linkAddBtn").classList.toggle("hidden",pp);
   $("pchip").classList.toggle("hidden",!(tab==="sent"&&personFilter));
   if(cntTab!==tab){cnt={};cntTab=tab}
   if(pp){$("list").innerHTML=`<div class="empty"><span>Loading…</span></div>`;await refreshPeople();if(tok===loadTok)renderPeople();return}
@@ -468,18 +549,18 @@ function pm(it){
 function render(){
   const q=$("q").value.trim();
   renderFolders();
-  const unit=tab==="sent"?"share":"file";
+  const unit=tab==="sent"?"share":"item";
   const rows=items.map((it,i)=>({it,i})).filter(({it})=>tab!=="sent"||!personFilter||shareEmail[it.sid]===personFilter);
   const showPend=tab==="shared"&&pend.length&&!cat&&!q;
   $("pchip").classList.toggle("hidden",!(tab==="sent"&&personFilter));
   if(personFilter)$("pchipBtn").textContent=`Sent to ${who(personFilter)}  ✕`;
   $("count").textContent=rows.length?`${rows.length}${hasMore?"+":""} ${unit}${rows.length===1&&!hasMore?"":"s"}`:"";
   if(!rows.length&&!showPend){
-    const m={my:["No Files Yet","Tap + to upload from this phone."],shared:["Nothing Shared With You","Files you accept appear here."],sent:["Nothing Shared Yet","Share a file from My Files to see it here."]}[tab];
+    const m={my:["No Files Yet","Tap + to upload, or send a link."],shared:["Nothing Shared With You","Items you accept appear here."],sent:["Nothing Shared Yet","Share a file or link to see it here."]}[tab];
     return $("list").innerHTML=(q||cat)?emptyHtml("No Results",q?`Nothing matches “${q}”.`:`No ${CATS[cat].l.toLowerCase()} here yet.`):emptyHtml(...m);
   }
-  const pendHtml=showPend?`<div class="hdr"><span>Requests · ${pend.length}</span></div><div class="list">${pend.map((p,i)=>{const k=kind(p.name),e=shareEmail[p.sid];return`<div class="row" data-pd="${i}" role="button" tabindex="0"><div class="ico" style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(p.name)}</div><div class="r-meta">${e?`From ${esc(who(e))} · `:""}${bytes(p.size)} · ${when(p.date)}</div></div><span class="pill">Review</span></div>`}).join("")}</div><div class="gap"></div>${rows.length?'<div class="hdr"><span>Files</span></div>':""}`:"";
-  const listHtml=rows.length?`<div class="list${selMode?" selmode":""}">${rows.map(({it,i})=>{const k=kind(it.name);return`<div class="row${selSet.has(it.id)?" on":""}" data-i="${i}" role="button" tabindex="0"><div class="chk"></div><div class="ico" ${ptype(it.name)==="image"?`data-p="${esc(it.path)}"`:""} style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(it.name)}</div><div class="r-meta">${bytes(it.size)} · ${when(it.date)}${it.exp?` · <span class="exp">${left(it.exp)}</span>`:""}${pm(it)}</div></div><button class="more" aria-label="Options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>`}).join("")}</div>${hasMore?'<button class="loadmore" id="moreBtn">Load More</button>':""}`:"";
+  const pendHtml=showPend?`<div class="hdr"><span>Requests · ${pend.length}</span></div><div class="list">${pend.map((p,i)=>{const k=itemKind(p),e=shareEmail[p.sid];return`<div class="row" data-pd="${i}" role="button" tabindex="0"><div class="ico" style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(p.name)}</div><div class="r-meta">${e?`From ${esc(who(e))} · `:""}${isLink(p.path)?"Link":bytes(p.size)} · ${when(p.date)}</div></div><span class="pill">Review</span></div>`}).join("")}</div><div class="gap"></div>${rows.length?'<div class="hdr"><span>Items</span></div>':""}`:"";
+  const listHtml=rows.length?`<div class="list${selMode?" selmode":""}">${rows.map(({it,i})=>{const k=itemKind(it),link=isLink(it.path);return`<div class="row${selSet.has(it.id)?" on":""}" data-i="${i}" role="button" tabindex="0"><div class="chk"></div><div class="ico" ${!link&&ptype(it.name)==="image"?`data-p="${esc(it.path)}"`:""} style="background:${k[1]}">${k[0]}</div><div class="r-info"><div class="r-name">${esc(it.name)}</div><div class="r-meta">${link?"Link":bytes(it.size)} · ${when(it.date)}${it.exp?` · <span class="exp">${left(it.exp)}</span>`:""}${pm(it)}</div></div><button class="more" aria-label="Options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>`}).join("")}</div>${hasMore?'<button class="loadmore" id="moreBtn">Load More</button>':''}`:"";
   $("list").innerHTML=pendHtml+listHtml;applyThumbs();
 }
 $("q").addEventListener("input",()=>{if(tab==="people")return renderPeople();clearTimeout(qTimer);qTimer=setTimeout(()=>load(),300)});
@@ -490,16 +571,54 @@ $("list").addEventListener("click",e=>{
   if(b.dataset.pd!==undefined)return decideSheet(pend[+b.dataset.pd]);
   const it=items[b.dataset.i];
   if(selMode){selSet.has(it.id)?selSet.delete(it.id):selSet.add(it.id);b.classList.toggle("on");return updateSel()}
+  if(isLink(it.path)&&!e.target.closest(".more"))return openLink(it);
   if(!e.target.closest(".more")&&ptype(it.name))return openPv(it);
   actions(it);
 });
+function openLink(it){
+  if(!it||!isLink(it.path))return;
+  window.open(it.path,"_blank","noopener");
+}
+async function copyLink(it){
+  if(!it||!isLink(it.path))return;
+  try{await navigator.clipboard.writeText(it.path);toast("Link copied","")}
+  catch{toast("Couldn't copy","error")}
+}
 function actions(it){
-  const sub=`${bytes(it.size)} · ${when(it.date)}`;
-  if(tab==="my")sheet(it.name,sub,[{l:"Download",f:()=>download(it)},{l:"Share…",f:()=>shareSheet(it)},{l:"Rename…",f:()=>renameSheet(it)},{l:"Auto-Delete…",f:()=>expSheet(it)},{l:"Delete",d:1,f:()=>sheet(`Delete “${it.name}”?`,"This permanently removes the file and its shares.",[{l:"Delete File",d:1,f:()=>del(it)}])}]);
-  else if(tab==="shared"){const e=shareEmail[it.sid];sheet(it.name,sub,[{l:"Download",f:()=>download(it)},...(e&&!contacts.some(c=>c.email===e)?[{l:"Save Sender to People…",f:()=>personSheet(e)}]:[]),{l:"Remove from My Files",d:1,f:()=>sheet(`Remove “${it.name}”?`,"It will be removed from your inbox. The sender keeps their original.",[{l:"Remove",d:1,f:()=>removeShared(it)}])}])}
+  const link=isLink(it.path);
+  const sub=link?`Link · ${when(it.date)}`:`${bytes(it.size)} · ${when(it.date)}`;
+  if(tab==="my")sheet(it.name,sub, link?[
+    {l:"Open Link",f:()=>openLink(it)},
+    {l:"Copy Link",f:()=>copyLink(it)},
+    {l:"Share with Person…",f:()=>shareSheet(it)},
+    {l:"Rename…",f:()=>renameSheet(it)},
+    {l:"Auto-Delete…",f:()=>expSheet(it)},
+    {l:"Delete",d:1,f:()=>sheet(`Delete “${it.name}”?`,"This permanently removes the link and its shares.",[{l:"Delete Link",d:1,f:()=>del(it)}])}
+  ]:[
+    {l:"Download",f:()=>download(it)},
+    {l:"Share with Person…",f:()=>shareSheet(it)},
+    {l:"Rename…",f:()=>renameSheet(it)},
+    {l:"Auto-Delete…",f:()=>expSheet(it)},
+    {l:"Delete",d:1,f:()=>sheet(`Delete “${it.name}”?`,"This permanently removes the file and its shares.",[{l:"Delete File",d:1,f:()=>del(it)}])}
+  ]);
+  else if(tab==="shared"){const e=shareEmail[it.sid];
+    sheet(it.name,sub, link?[
+      {l:"Open Link",f:()=>openLink(it)},
+      {l:"Copy Link",f:()=>copyLink(it)},
+      ...(e&&!contacts.some(c=>c.email===e)?[{l:"Save Sender to People…",f:()=>personSheet(e)}]:[]),
+      {l:"Remove from Inbox",d:1,f:()=>sheet(`Remove “${it.name}”?`,"It will be removed from your inbox.",[{l:"Remove",d:1,f:()=>removeShared(it)}])}
+    ]:[
+      {l:"Download",f:()=>download(it)},
+      ...(e&&!contacts.some(c=>c.email===e)?[{l:"Save Sender to People…",f:()=>personSheet(e)}]:[]),
+      {l:"Remove from My Files",d:1,f:()=>sheet(`Remove “${it.name}”?`,"It will be removed from your inbox. The sender keeps their original.",[{l:"Remove",d:1,f:()=>removeShared(it)}])}
+    ]);
+  }
   else sheet(it.name,sub,[{l:"Remove Access",d:1,f:()=>revoke(it)}]);
 }
 const scr=$("scroll");scr.addEventListener("scroll",()=>$("nav").classList.toggle("solid",scr.scrollTop>38),{passive:true});
+
+/* ---------- compose a new link (nav button) ---------- */
+$("linkAddBtn").onclick=()=>{if(tab==="people")personSheet();else shareLinkSheet()};
 
 /* ---------- refresh button ---------- */
 $("refreshBtn").onclick=async()=>{
@@ -516,8 +635,6 @@ $("refreshBtn").onclick=async()=>{
 };
 
 /* ---------- file actions ---------- */
-
-/* Single-file download (used by preview, action sheets, etc.) */
 function triggerDownload(url,name){
   const a=document.createElement("a");
   a.href=url;a.download=name||"";a.rel="noopener";a.style.display="none";
@@ -526,6 +643,7 @@ function triggerDownload(url,name){
   setTimeout(()=>a.remove(),1500);
 }
 async function download(it){
+  if(isLink(it.path))return openLink(it);
   try{
     busy(true);
     const{data,error}=await sb.storage.from(BUCKET).createSignedUrl(it.path,120,{download:it.name});
@@ -535,12 +653,14 @@ async function download(it){
   }catch(e){busy(false);console.error(e);toast("Download failed.","error")}
 }
 
-/* Multiple-file download — bundled as a single ZIP file */
 async function downloadMany(arr){
   if(!arr||!arr.length)return;
-  if(arr.length===1)return download(arr[0]);
+  const real=arr.filter(x=>!isLink(x.path));
+  const links=arr.filter(x=>isLink(x.path));
+  if(!real.length){links.forEach(openLink);return}
+  if(real.length===1&&!links.length)return download(real[0]);
 
-  const total=arr.length;
+  const total=real.length;
   const p=$("progress");
   p.classList.remove("hidden");
   $("pName").textContent="Preparing ZIP…";
@@ -554,8 +674,7 @@ async function downloadMany(arr){
     const used={};
     let failed=0,done=0;
 
-    /* Fetch each file and add it to the archive */
-    for(const it of arr){
+    for(const it of real){
       $("pName").textContent=it.name;
       $("pInfo").textContent=`File ${done+1} of ${total}`;
       try{
@@ -563,7 +682,6 @@ async function downloadMany(arr){
         if(error||!data){failed++}
         else{
           let name=it.name;
-          /* De-duplicate names inside the archive */
           if(used[name]){used[name]++;const dot=name.lastIndexOf(".");name=dot>0?name.slice(0,dot)+" ("+used[name]+")"+name.slice(dot):name+" ("+used[name]+")"}
           else used[name]=1;
           zip.file(name,data);
@@ -581,7 +699,6 @@ async function downloadMany(arr){
       return toast("Couldn't download files.","error");
     }
 
-    /* Compress and generate the blob (last 10% of the bar) */
     $("pName").textContent="Compressing…";
     $("pSize").textContent=`${count} file${count===1?"":"s"}`;
     $("pInfo").textContent="";
@@ -616,8 +733,10 @@ async function purge(id,path){
   await sb.from("file_shares").delete().eq("storage_path",path).eq("owner_id",user.id);
   const d=await sb.from("files").delete().eq("id",id).eq("owner_id",user.id);
   if(d.error)return d;
-  const r=await sb.storage.from(BUCKET).remove([path,thumbPath(path)]);
-  if(r.error)console.warn("Storage object not removed:",path,r.error);
+  if(!isLink(path)){
+    const r=await sb.storage.from(BUCKET).remove([path,thumbPath(path)]);
+    if(r.error)console.warn("Storage object not removed:",path,r.error);
+  }
   return{error:null};
 }
 async function del(it){
@@ -625,7 +744,7 @@ async function del(it){
   const r=await purge(it.id,it.path);
   busy(false);
   if(r&&r.error){console.error(r.error);return toast("Couldn't delete: "+r.error.message,"error")}
-  toast("File deleted","success");load();
+  toast(isLink(it.path)?"Link deleted":"File deleted","success");load();
 }
 async function revoke(it){
   closePv();busy(true);
@@ -640,7 +759,7 @@ async function removeShared(it){
   busy(false);
   if(error){console.error(error);return toast(error.message,"error")}
   if(!data||!data.length)return toast("Couldn't remove. Add the delete policy on file_shares.","error");
-  toast("File removed","success");load();
+  toast("Removed","success");load();
 }
 
 /* ---------- upload ---------- */
@@ -796,7 +915,8 @@ function pickHtml(){
 }
 function decideSheet(p){
   if(!p)return;const e=shareEmail[p.sid];
-  sheet(`${who(e)} wants to share a file`,`${p.name} · ${bytes(p.size)}`,[{l:"Accept",f:()=>respond(p,"accept")},{l:"Decline",d:1,f:()=>respond(p,"decline")},{l:"Decline & Block Sender",d:1,f:()=>respond(p,"block")}]);
+  const link=isLink(p.path);
+  sheet(`${who(e)} sent you ${link?"a link":"a file"}`, `${p.name}${link?"":" · "+bytes(p.size)}`, [{l:link?"Open":"Accept",f:()=>link?openLink(p):respond(p,"accept")},{l:"Accept & Save",f:()=>respond(p,"accept")},{l:"Decline",d:1,f:()=>respond(p,"decline")},{l:"Decline & Block Sender",d:1,f:()=>respond(p,"block")}]);
 }
 async function respond(p,act){
   busy(true);const{data,error}=await sb.rpc("respond_to_share",{p_share_id:p.sid,p_action:act});busy(false);
@@ -827,11 +947,11 @@ function startRealtime(){
   stopRealtime();
   const bump=()=>{refreshBadge();clearTimeout(rtT);rtT=setTimeout(()=>{if((tab==="shared"||tab==="sent")&&!selMode)load()},400)};
   rtCh=sb.channel("shares-"+user.id)
-    .on("postgres_changes",{event:"INSERT",schema:"public",table:"file_shares",filter:`recipient_id=eq.${user.id}`},p=>{if(p.new&&p.new.status==="pending")toast("New file request","success");bump()})
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"file_shares",filter:`recipient_id=eq.${user.id}`},p=>{if(p.new&&p.new.status==="pending")toast("New request","success");bump()})
     .on("postgres_changes",{event:"UPDATE",schema:"public",table:"file_shares",filter:`recipient_id=eq.${user.id}`},()=>bump())
     .on("postgres_changes",{event:"UPDATE",schema:"public",table:"file_shares",filter:`owner_id=eq.${user.id}`},p=>{
       const a=p.old&&p.old.status,b=p.new&&p.new.status;
-      if(a&&b&&a!==b){if(b==="approved")toast("A file you sent was accepted","success");else if(b==="declined")toast("A file you sent was declined","error")}
+      if(a&&b&&a!==b){if(b==="approved")toast("A share you sent was accepted","success");else if(b==="declined")toast("A share you sent was declined","error")}
       bump();
     })
     .subscribe();
@@ -878,7 +998,6 @@ $("sortBtn").onclick=()=>sheet("Sort By","",Object.keys(SORTS).map(k=>({l:(k===s
 $("list").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("row")){e.preventDefault();e.target.click()}});
 
 /* ---------- auto-delete ---------- */
-/* Default is 1 hour. Options range from 1 hour up to 1 month, or never. */
 const K=["hour","day","week","month","never"],
   DL={hour:"After 1 hour",day:"After 1 day",week:"After 1 week",month:"After 1 month",never:"Never"},
   DUR={hour:36e5,day:864e5,week:6048e5,month:2592e6};
@@ -892,7 +1011,7 @@ function left(iso){
   if(h>=1)return`Deletes in ${h} hr ${m%60} min`;
   return`Deletes in ${m} min`;
 }
-function defSheet(){sheet("Auto-Delete New Uploads","Files are removed automatically after this time.",K.map(k=>({l:(k===defExp?"✓ ":"")+DL[k],f:()=>{defExp=k;try{localStorage.setItem("pd_exp",k)}catch{}sb.auth.updateUser({data:{pd_exp:k}});toast("Auto-Delete: "+DL[k])}})))}
+function defSheet(){sheet("Auto-Delete New Uploads","Files and links are removed automatically after this time.",K.map(k=>({l:(k===defExp?"✓ ":"")+DL[k],f:()=>{defExp=k;try{localStorage.setItem("pd_exp",k)}catch{}sb.auth.updateUser({data:{pd_exp:k}});toast("Auto-Delete: "+DL[k])}})))}
 function expSheet(it){sheet("Auto-Delete",it.name,K.map(k=>({l:DL[k],f:()=>setExp(it,k)})))}
 async function setExp(it,k){
   const v=expAt(k);busy(true);
@@ -907,7 +1026,7 @@ async function sweep(){
   const{data,error}=await sb.from("files").select("id,storage_path").eq("owner_id",user.id).lt("expires_at",new Date().toISOString());
   if(error||!data||!data.length)return 0;
   let n=0;for(const f of data){const r=await purge(f.id,f.storage_path);if(!(r&&r.error))n++}
-  if(n)toast(`${n} expired file${n===1?"":"s"} removed`);
+  if(n)toast(`${n} expired item${n===1?"":"s"} removed`);
   return n;
 }
 document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&user){const n=await sweep();if(n&&tab==="my")load()}});
@@ -953,9 +1072,11 @@ function setSel(on){
   $("settings").classList.toggle("hidden",on);
   $("refreshBtn").classList.toggle("hidden",on);
   $("addBtn").classList.toggle("hidden",on);
+  $("linkAddBtn").classList.toggle("hidden",on);
   $("allBtn").classList.toggle("hidden",!on);
   $("tabbar").classList.toggle("hidden",on);$("selbar").classList.toggle("hidden",!on);
   $("shBtn").classList.toggle("hidden",tab!=="my");
+  $("dlBtn").classList.toggle("hidden",tab==="sent");
   $("delBtn").textContent=tab==="sent"?"Remove Access":tab==="shared"?"Remove":"Delete";
   render();updateSel();
 }
@@ -977,8 +1098,8 @@ $("delBtn").onclick=()=>{
   const arr=items.filter(x=>selSet.has(x.id)),n=arr.length,sent=tab==="sent",rcv=tab==="shared";if(!n)return;
   const s=n>1?"s":"";
   sheet(
-    sent?`Remove access for ${n} share${s}?`:rcv?`Remove ${n} file${s} from your inbox?`:`Delete ${n} file${s}?`,
-    sent?"Recipients will no longer see them.":rcv?"The senders keep their originals.":"This permanently removes the files and their shares.",
+    sent?`Remove access for ${n} share${s}?`:rcv?`Remove ${n} item${s} from your inbox?`:`Delete ${n} item${s}?`,
+    sent?"Recipients will no longer see them.":rcv?"The senders keep their originals.":"This permanently removes the items and their shares.",
     [{l:sent?"Remove Access":rcv?"Remove":"Delete",d:1,f:async()=>{
       busy(true);let ok=0,err="";
       for(const it of arr){
@@ -989,7 +1110,7 @@ $("delBtn").onclick=()=>{
         if(r&&r.error)err=r.error.message;else ok++;
       }
       busy(false);setSel(false);
-      toast(ok===n?(sent?"Access removed":rcv?`${n} file${s} removed`:`${n} file${s} deleted`):`${ok} of ${n} done: ${err}`,ok===n?"success":"error");
+      toast(ok===n?(sent?"Access removed":rcv?`${n} item${s} removed`:`${n} item${s} deleted`):`${ok} of ${n} done: ${err}`,ok===n?"success":"error");
       load();
     }}]);
 };
@@ -1009,7 +1130,7 @@ async function getUrl(path){
   return null;
 }
 async function thumbs(){
-  const need=items.filter(x=>ptype(x.name)==="image"&&!fresh(thumbPath(x.path))).map(x=>thumbPath(x.path));
+  const need=items.filter(x=>!isLink(x.path)&&ptype(x.name)==="image"&&!fresh(thumbPath(x.path))).map(x=>thumbPath(x.path));
   if(need.length){const{data}=await sb.storage.from(BUCKET).createSignedUrls(need,900);(data||[]).forEach(d=>{if(d.signedUrl&&!d.error)urlCache[d.path]={u:d.signedUrl,t:Date.now()}})}
   applyThumbs();
 }
@@ -1021,7 +1142,8 @@ function applyThumbs(){
 }
 let pvList=[],pvIdx=0,pvTok=0,z={s:1,x:0,y:0},g={},tapT=0,chromeT;
 function openPv(it){
-  pvList=items.filter(x=>ptype(x.name));
+  if(isLink(it.path))return openLink(it);
+  pvList=items.filter(x=>!isLink(x.path)&&ptype(x.name));
   pvIdx=Math.max(0,pvList.indexOf(it));
   $("pv").classList.remove("hidden","pv-hide");showPv();
 }
