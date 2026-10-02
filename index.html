@@ -18,31 +18,27 @@
 <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js" integrity="sha384-UlHjK3F7TCQCEUpnoa1ohMbP2oaWB3Aypv4gMo511vaZ86uUZ0Zv7UzZ0J1zRUT1" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-<!-- ==================== ONESIGNAL SDK ==================== -->
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<!-- ==================== ONESIGNAL SDK (single init) ==================== -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: "a3afc4ab-9ded-459d-9408-ff9005fd28e0",
-    });
+    if (window.__osInitialized) return;
+    window.__osInitialized = true;
+    try {
+      await OneSignal.init({
+        appId: "a3afc4ab-9ded-459d-9408-ff9005fd28e0",
+        serviceWorkerPath: "sw.js",
+        serviceWorkerParam: { scope: "/" },
+        allowLocalhostAsSecureOrigin: true,
+        notifyButton: { enable: false }
+      });
+    } catch (e) {
+      if (!String(e).includes("already initialized")) console.warn(e);
+    }
   });
 </script>
-<script>
-  /* Replace YOUR_ONESIGNAL_APP_ID with the real ID from your OneSignal dashboard. */
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
-  OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: "a3afc4ab-9ded-459d-9408-ff9005fd28e0",
-      serviceWorkerPath: "OneSignalSDKWorker.js",
-      serviceWorkerParam: { scope: "/" },
-      allowLocalhostAsSecureOrigin: true, /* helpful for local testing */
-      notifyButton: { enable: false }      /* we drive the prompt ourselves */
-    });
-  });
-</script>
-<!-- ======================================================== -->
+<!-- ====================================================================== -->
 
 <style>
 :root{--blue:#007aff;--red:#ff3b30;--green:#34c759;--bg:#f2f2f7;--card:#fff;--label:#000;--label2:rgba(60,60,67,.6);--sep:rgba(60,60,67,.18);--fill:rgba(120,120,128,.12);--blur:rgba(249,249,249,.82);--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
@@ -316,20 +312,32 @@ const BUCKET="my-files";
 const $=id=>document.getElementById(id);
 let user=null,tab="my",items=[],signup=false;
 
+/* ---------- auto-delete constants (must be declared before first use) ---------- */
+const K=["hour","day","week","month","never"],
+  DL={hour:"After 1 hour",day:"After 1 day",week:"After 1 week",month:"After 1 month",never:"Never"},
+  DUR={hour:36e5,day:864e5,week:6048e5,month:2592e6};
+let defExp="hour";try{defExp=localStorage.getItem("pd_exp")||"hour"}catch{}
+if(!K.includes(defExp))defExp="hour";
+const expAt=k=>k==="never"?null:new Date(Date.now()+DUR[k]).toISOString();
+function left(iso){
+  const ms=new Date(iso)-Date.now();if(ms<=0)return"Deleting soon";
+  const d=Math.floor(ms/864e5),h=Math.floor(ms/36e5),m=Math.floor(ms/6e4);
+  if(d>=1)return`Deletes in ${d} day${d===1?"":"s"}`;
+  if(h>=1)return`Deletes in ${h} hr ${m%60} min`;
+  return`Deletes in ${m} min`;
+}
+
 /* ---------- OneSignal helpers ---------- */
-/* Called after a successful sign-in to link the OneSignal subscription to the Supabase user ID. */
 async function osLogin(userId){
   try{
     await OneSignalDeferred.push(async function(OneSignal){
       await OneSignal.login(userId);
-      /* Optionally request permission immediately after login if not yet granted. */
       if(!OneSignal.Notifications.permission){
         try{await OneSignal.Notifications.requestPermission()}catch{}
       }
     });
   }catch(e){console.warn("OneSignal login failed:",e)}
 }
-/* Called on sign-out to unlink the subscription. */
 async function osLogout(){
   try{
     await OneSignalDeferred.push(async function(OneSignal){
@@ -337,13 +345,11 @@ async function osLogout(){
     });
   }catch(e){console.warn("OneSignal logout failed:",e)}
 }
-/* Toggle the OS-level push permission. */
 async function osTogglePush(){
   return new Promise(resolve=>{
     OneSignalDeferred.push(async function(OneSignal){
       try{
         if(OneSignal.Notifications.permission){
-          /* Can't programmatically revoke browser permission; guide user to settings. */
           resolve("blocked");
         }else{
           const ok=await OneSignal.Notifications.requestPermission();
@@ -501,7 +507,6 @@ async function showApp(u){
   refreshPeople();
   refreshBadge();
   startRealtime();
-  /* Link OneSignal to this user. */
   osLogin(u.id);
   await sweep();
   await load();
@@ -1337,6 +1342,27 @@ $("delBtn").onclick=()=>{
     }}]);
 };
 $("q").addEventListener("input",()=>{if(selMode)updateSel()});
+
+/* ---------- auto-delete ---------- */
+function defSheet(){sheet("Auto-Delete New Uploads","Files and links are removed automatically after this time.",K.map(k=>({l:(k===defExp?"✓ ":"")+DL[k],f:()=>{defExp=k;try{localStorage.setItem("pd_exp",k)}catch{}sb.auth.updateUser({data:{pd_exp:k}});toast("Auto-Delete: "+DL[k])}})))}
+function expSheet(it){sheet("Auto-Delete",it.name,K.map(k=>({l:DL[k],f:()=>setExp(it,k)})))}
+async function setExp(it,k){
+  const v=expAt(k);busy(true);
+  const{data,error}=await sb.from("files").update({expires_at:v}).eq("id",it.id).eq("owner_id",user.id).select("id");
+  busy(false);
+  if(error){console.error(error);return toast(/expires_at/.test(error.message)?"Add the expires_at column in Supabase first.":error.message,"error")}
+  if(!data||!data.length)return toast("Couldn't update. Check the update policy on files.","error");
+  it.exp=v;render();toast(k==="never"?"Auto-delete turned off":"Auto-Delete: "+DL[k],"success");
+}
+async function sweep(){
+  if(!user)return 0;
+  const{data,error}=await sb.from("files").select("id,storage_path").eq("owner_id",user.id).lt("expires_at",new Date().toISOString());
+  if(error||!data||!data.length)return 0;
+  let n=0;for(const f of data){const r=await purge(f.id,f.storage_path);if(!(r&&r.error))n++}
+  if(n)toast(`${n} expired item${n===1?"":"s"} removed`);
+  return n;
+}
+document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&user){const n=await sweep();if(n&&tab==="my")load()}});
 
 /* ---------- preview ---------- */
 const PT={image:["jpg","jpeg","png","gif","webp","bmp","svg","heic","avif"],video:["mp4","mov","m4v","webm"],audio:["mp3","wav","aac","m4a","ogg"],pdf:["pdf"]};
