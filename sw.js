@@ -1,104 +1,85 @@
-/* PrivateDrive service worker: offline cache + Web Push */
-const V = "pd-v4";
-const PRE = ["./", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
-const ICON = "icons/icon-192.png";
+// OneSignal service worker must be imported FIRST, before any other code.
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
-/* ---------- Install / activate ---------- */
-self.addEventListener("install", e => {
-  e.waitUntil((async () => {
-    const c = await caches.open(V);
-    /* Cache each file separately so one missing file can't break installation. */
-    await Promise.all(PRE.map(u => c.add(u).catch(() => {})));
-    await self.skipWaiting();
-  })());
+// Bump this version string when you want to invalidate old caches.
+const CACHE_VERSION = "privatedrive-v1";
+const CACHE_ASSETS = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/icon-maskable-512.png"
+];
+
+/* ---------------- Install ---------------- */
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE_VERSION).then(cache => cache.addAll(CACHE_ASSETS))
+  );
+  self.skipWaiting();
 });
 
-self.addEventListener("activate", e => {
-  e.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== V).map(k => caches.delete(k)));
-    await self.clients.claim();
-  })());
+/* ---------------- Activate ---------------- */
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))
+      )
+    )
+  );
+  self.clients.claim();
 });
 
-/* ---------- Fetch strategies ---------- */
-async function put(req, res) {
-  /* Only full 200 responses can be cached (206 partial video/audio would throw). */
-  if (res && res.status === 200) {
-    try { const c = await caches.open(V); await c.put(req, res.clone()); } catch (err) {}
-  }
-}
-
-async function networkFirst(req) {
-  try {
-    const res = await fetch(req);
-    put(req, res);
-    return res;
-  } catch (err) {
-    const hit = await caches.match(req);
-    if (hit) return hit;
-    if (req.mode === "navigate") {
-      const page = (await caches.match("./")) || (await caches.match("index.html"));
-      if (page) return page;
-    }
-    throw err;
-  }
-}
-
-async function cacheFirst(req) {
-  const hit = await caches.match(req);
-  if (hit) return hit;
-  const res = await fetch(req);
-  put(req, res);
-  return res;
-}
-
-self.addEventListener("fetch", e => {
-  const req = e.request;
-  if (req.method !== "GET" || req.headers.has("range")) return;
+/* ---------------- Fetch ---------------- */
+self.addEventListener("fetch", event => {
+  const req = event.request;
   const url = new URL(req.url);
-  if (url.origin === self.location.origin) e.respondWith(networkFirst(req));
-  else if (url.hostname === "cdn.jsdelivr.net") e.respondWith(cacheFirst(req));
-  /* Supabase and everything else go straight to the network. */
-});
 
-/* ---------- Web Push ---------- */
-self.addEventListener("push", e => {
-  let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch (err) {
-    try { d = { body: e.data.text() }; } catch (err2) {}
+  // Never cache Supabase or OneSignal requests — always go to network.
+  if (
+    url.hostname.includes("supabase.co") ||
+    url.hostname.includes("onesignal.com") ||
+    req.method !== "GET"
+  ) {
+    return; // fall through to network
   }
-  e.waitUntil((async () => {
-    /* Always show a notification (required on iOS and Chrome for push). */
-    await self.registration.showNotification(d.title || "PrivateDrive", {
-      body: d.body || "You have a new notification.",
-      icon: ICON,
-      badge: ICON,
-      tag: d.tag || "pd",
-      renotify: true,
-      data: { tab: d.tab || "shared" }
-    });
-    try {
-      if (typeof d.count === "number" && self.navigator.setAppBadge) {
-        if (d.count > 0) await self.navigator.setAppBadge(d.count);
-        else await self.navigator.clearAppBadge();
-      }
-    } catch (err) {}
-  })());
+
+  // Cache-first for same-origin GET requests.
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(req).then(cached => {
+        return (
+          cached ||
+          fetch(req)
+            .then(res => {
+              // Cache successful responses.
+              if (res.ok && res.type === "basic") {
+                const clone = res.clone();
+                caches.open(CACHE_VERSION).then(c => c.put(req, clone));
+              }
+              return res;
+            })
+            .catch(() => cached)
+        );
+      })
+    );
+  }
 });
 
-self.addEventListener("notificationclick", e => {
-  e.notification.close();
-  const tab = (e.notification.data && e.notification.data.tab) || "shared";
-  e.waitUntil((async () => {
-    const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    /* Prefer a window that's already visible, otherwise any open one. */
-    const target = wins.find(w => w.visibilityState === "visible") || wins[0];
-    if (target) {
-      try { await target.focus(); } catch (err) {}
-      target.postMessage({ type: "open-tab", tab });
-      return;
-    }
-    await self.clients.openWindow("./?tab=" + tab);
-  })());
+/* ---------------- Message handler (MUST be at top level) ---------------- */
+self.addEventListener("message", event => {
+  if (!event.data) return;
+  if (event.data === "skipWaiting") {
+    self.skipWaiting();
+  }
+  // Allow the page to ask the SW to open a specific tab.
+  if (event.data.type === "open-tab" && event.data.tab) {
+    event.waitUntil(
+      self.clients.matchAll({ type: "window" }).then(clients => {
+        clients.forEach(client => client.postMessage(event.data));
+      })
+    );
+  }
 });
