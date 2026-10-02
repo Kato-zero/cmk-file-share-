@@ -2,6 +2,7 @@
   "name": "PrivateDrive",
   "short_name": "PrivateDrive",
   "description": "Private file transfer and storage",
+  "id": "/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
