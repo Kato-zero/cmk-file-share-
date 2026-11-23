@@ -312,13 +312,15 @@ function left(iso){
 
 /* ---------- Firebase Cloud Messaging ---------- */
 const FB_CONFIG={
-  apiKey:"YOUR_API_KEY",
-  authDomain:"YOUR_PROJECT.firebaseapp.com",
-  projectId:"YOUR_PROJECT_ID",
-  messagingSenderId:"YOUR_SENDER_ID",
-  appId:"YOUR_APP_ID"
+  apiKey:"AIzaSyCxYjffm9bKBNZ0x-4Us0F_ERIgbp9LqrI",
+  authDomain:"push-demo-10d34.firebaseapp.com",
+  projectId:"push-demo-10d34",
+  storageBucket:"push-demo-10d34.firebasestorage.app",
+  messagingSenderId:"489596640686",
+  appId:"1:489596640686:web:75c43f96a11a0ae7183c3f",
+  measurementId:"G-NM3Z6QT8BX"
 };
-const FB_VAPID="YOUR_VAPID_PUBLIC_KEY";
+const FB_VAPID="BMloa8L2xHWbIVf9BVdsLGRAGon0ka6jCl3ZF1IAQetV-WjTomgUgaEs48FA8SScMtr_0JIxxptg6KL5tqSXjwo";
 let fbMessaging=null;
 try{
   firebase.initializeApp(FB_CONFIG);
